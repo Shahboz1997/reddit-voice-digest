@@ -1,0 +1,126 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+
+import { formatDigestDate } from "@/lib/date";
+import type { DigestEpisode } from "@/lib/types";
+
+interface ArchiveSidebarProps {
+  episodes: DigestEpisode[];
+  rssUrl: string;
+}
+
+function formatShortDate(value: string) {
+  return formatDigestDate(value, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+
+    if (!normalized) {
+      return episodes;
+    }
+
+    return episodes.filter((episode) => {
+      const haystack = [
+        episode.title,
+        episode.summary,
+        ...episode.topics,
+        ...episode.keyThoughts,
+        ...episode.items.map((item) => item.threadTitle),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalized);
+    });
+  }, [episodes, query]);
+
+  return (
+    <aside className="space-y-6">
+      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+        <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Archive</p>
+        <h2 className="mt-2 text-xl font-semibold text-white">Past issues and search</h2>
+
+        <input
+          className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-300/40"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search topics or keywords"
+          type="search"
+          value={query}
+        />
+
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          {episodes.map((episode) => (
+            <Link
+              key={episode.id}
+              className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-center transition hover:border-cyan-300/30 hover:bg-white/10"
+              href={`/digest/${episode.slug}`}
+            >
+              <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">
+                {formatDigestDate(episode.publishedAt, { weekday: "short" })}
+              </p>
+              <p className="mt-1 text-sm font-medium text-white">{formatShortDate(episode.publishedAt)}</p>
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {filtered.map((episode) => (
+            <Link
+              key={episode.id}
+              className="block rounded-3xl border border-white/10 bg-slate-950/60 p-4 transition hover:border-cyan-300/30 hover:bg-white/10"
+              href={`/digest/${episode.slug}`}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium text-white">{episode.title}</p>
+                <span className="text-xs text-slate-400">{formatShortDate(episode.publishedAt)}</span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {episode.topics.map((topic) => (
+                  <span
+                    key={topic}
+                    className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100"
+                  >
+                    #{topic}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+        <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Notifications</p>
+        <h2 className="mt-2 text-xl font-semibold text-white">Smart delivery</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          RSS is live now. Telegram is scaffolded in preferences so you can wire a bot when ready.
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <a
+            className="inline-flex rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300"
+            href={rssUrl}
+          >
+            Open RSS feed
+          </a>
+          <Link
+            className="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
+            href="/settings"
+          >
+            Configure delivery
+          </Link>
+        </div>
+      </section>
+    </aside>
+  );
+}

@@ -1,0 +1,11 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// В Prisma ORM 7.x нельзя задать `url` / `directUrl` внутри `schema.prisma` (см. ошибку валидации P1012).
+// Логически это всё равно две строки из окружения:
+//   - DATABASE_URL — пулер, transaction mode :6543 (рантайм: `lib/prisma.ts`)
+//   - DIRECT_URL — прямой хост Postgres :5432 без пулера (CLI: `prisma.config.ts` → db pull / migrate)
+datasource db {
+  provider = "postgresql"
+}
