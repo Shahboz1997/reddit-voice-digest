@@ -9,10 +9,12 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "db:check": "node --env-file=.env.local scripts/check-db-connection.cjs",
     "db:seed-sources": "tsx scripts/seed-sources.ts",
     "pipeline:run": "tsx scripts/run-pipeline.ts",
     "prisma:generate": "prisma generate",
-    "prisma:pull": "prisma db pull",
+    "prisma:validate": "prisma validate",
+    "prisma:baseline": "node scripts/prisma-baseline.cjs",
     "prisma:studio": "prisma studio"
   },
   "keywords": [],
@@ -27,6 +29,7 @@
     "next": "^16.2.6",
     "openai": "^6.37.0",
     "pg": "^8.20.0",
+    "postgres": "^3.4.9",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "zod": "^4.4.3"

@@ -18,35 +18,55 @@ interface DashboardClientProps {
 
 const preferencesStorageKey = "reddit-voice-digest.preferences";
 
-function subscribeToSubredditPreferences() {
-  return () => undefined;
-}
+let cachedRaw: string | null | undefined;
+let cachedSubreddits: readonly string[] = defaultSubredditPreferences;
 
-function getStoredSubreddits() {
+function readStoredSubreddits(): readonly string[] {
   try {
     const raw = window.localStorage.getItem(preferencesStorageKey);
 
+    if (raw === cachedRaw) {
+      return cachedSubreddits;
+    }
+
+    cachedRaw = raw;
+
     if (!raw) {
-      return defaultSubredditPreferences;
+      cachedSubreddits = defaultSubredditPreferences;
+      return cachedSubreddits;
     }
 
     const parsed = JSON.parse(raw) as { subreddits?: string[] };
 
     if (parsed.subreddits?.length) {
-      return parsed.subreddits;
+      cachedSubreddits = parsed.subreddits;
+      return cachedSubreddits;
     }
   } catch {
     // If local storage is missing or malformed, the dashboard falls back to defaults.
   }
 
-  return defaultSubredditPreferences;
+  cachedSubreddits = defaultSubredditPreferences;
+  return cachedSubreddits;
+}
+
+function subscribeToSubredditPreferences(onStoreChange: () => void) {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === preferencesStorageKey || event.key === null) {
+      cachedRaw = undefined;
+      onStoreChange();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+  return () => window.removeEventListener("storage", handleStorage);
 }
 
 export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
   const latestEpisode = episodes[0];
   const selectedSubreddits = useSyncExternalStore(
     subscribeToSubredditPreferences,
-    getStoredSubreddits,
+    readStoredSubreddits,
     () => defaultSubredditPreferences,
   );
 

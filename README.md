@@ -71,25 +71,31 @@ The repository already contains:
 
 ## Prisma setup
 
-Prisma is scaffolded in this project with:
+Prisma is an optional ORM layer alongside Supabase:
 
-- `prisma/schema.prisma`
-- `lib/prisma.ts`
+- `prisma/schema.prisma` — hand-maintained mirror of `supabase/migrations/`
+- `lib/prisma.ts` — Prisma client (uses `DATABASE_URL`, port `6543`)
 
-Recommended Supabase setup for Prisma:
+**Schema changes:** edit SQL in `supabase/migrations/`, apply with Supabase CLI, then update
+`prisma/schema.prisma` to match and run `npm run prisma:generate`.
 
-- `DATABASE_URL` -> Supavisor transaction mode on port `6543` with `?pgbouncer=true`
-- `DIRECT_URL` -> Supavisor session mode on port `5432`
+**Do not run** `prisma db pull` (RLS/comments on Supabase break introspection) or
+`prisma migrate dev` / `prisma migrate reset` against the linked database (risk of drift/reset).
 
-Supabase currently recommends using a dedicated Prisma database user instead of the default
-`postgres` role. After you configure those two env vars, run:
+One-time baseline (after Supabase migrations are already applied):
 
 ```bash
-npm run prisma:pull
+npm run prisma:baseline
 npm run prisma:generate
 ```
 
-That will introspect your current Supabase tables into Prisma models and generate the client.
+Env vars:
+
+- `DATABASE_URL` — transaction pooler port `6543` with `?pgbouncer=true` (app runtime)
+- `DIRECT_URL` — session pooler port `5432` (Prisma CLI only)
+
+If `prisma db pull` previously created stray tables (`audioUrl`, `title`, etc.), drop them in the
+Supabase SQL editor; they are not part of this app schema.
 
 ## Running the pipeline
 
