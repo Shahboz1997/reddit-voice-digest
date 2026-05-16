@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ShareInsightDialog } from "@/components/share-insight-dialog";
 import type { DigestEpisode } from "@/lib/types";
 
 interface KeyThoughtsPanelProps {
@@ -10,10 +11,12 @@ interface KeyThoughtsPanelProps {
 
 export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
   const [activeTab, setActiveTab] = useState<"thoughts" | "transcript">("thoughts");
+  const [shareCardId, setShareCardId] = useState<string | null>(null);
 
   const insightCards = useMemo(() => {
     return episode.items.map((item) => ({
       id: item.id,
+      subredditName: item.subredditName,
       title: item.threadTitle,
       summary: item.summary,
       points: item.tldrPoints,
@@ -22,6 +25,8 @@ export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
       commentLabel: item.commentCtaLabel,
     }));
   }, [episode.items]);
+
+  const shareCard = shareCardId ? (insightCards.find((c) => c.id === shareCardId) ?? null) : null;
 
   return (
     <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
@@ -69,6 +74,13 @@ export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
               </ul>
 
               <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-400/35 hover:bg-cyan-400/10"
+                  onClick={() => setShareCardId(card.id)}
+                  type="button"
+                >
+                  Поделиться инсайтом
+                </button>
                 <a
                   className="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-white transition hover:border-cyan-300/40 hover:text-cyan-200"
                   href={card.threadUrl}
@@ -97,6 +109,21 @@ export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
           {episode.transcriptText}
         </div>
       )}
+
+      {shareCard ? (
+        <ShareInsightDialog
+          key={shareCard.id}
+          episodeSlug={episode.slug}
+          episodeTitle={episode.title}
+          onClose={() => setShareCardId(null)}
+          open
+          publishedAt={episode.publishedAt}
+          subredditName={shareCard.subredditName}
+          summary={shareCard.summary}
+          threadTitle={shareCard.title}
+          tldrPoints={shareCard.points}
+        />
+      ) : null}
     </section>
   );
 }

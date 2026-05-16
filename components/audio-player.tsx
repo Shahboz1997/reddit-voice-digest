@@ -19,12 +19,24 @@ function formatTime(totalSeconds: number) {
   return `${minutes}:${seconds}`;
 }
 
+function isBenignPlayError(error: unknown) {
+  const dom = error as DOMException | undefined;
+  if (!dom?.name) return false;
+  return dom.name === "AbortError" || dom.name === "NotAllowedError";
+}
+
 export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasRealAudio = Boolean(audioUrl);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    if (!hasRealAudio) {
+      setIsPlaying(false);
+    }
+  }, [hasRealAudio]);
 
   useEffect(() => {
     if (hasRealAudio) {
@@ -62,9 +74,17 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
   useEffect(() => {
     const audio = audioRef.current;
 
-    if (!audio) {
+    if (!audio || !hasRealAudio) {
       return;
     }
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
@@ -75,14 +95,33 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
       setCurrentTime(durationSeconds);
     };
 
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
 
     return () => {
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, [durationSeconds]);
+  }, [audioUrl, durationSeconds, hasRealAudio]);
+
+  useEffect(() => {
+    if (!hasRealAudio || !audioUrl) {
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.pause();
+    setIsPlaying(false);
+    setCurrentTime(0);
+  }, [audioUrl, hasRealAudio]);
 
   const activeChapter = useMemo(() => {
     return (
@@ -96,15 +135,23 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
 
   const progress = durationSeconds > 0 ? Math.min((currentTime / durationSeconds) * 100, 100) : 0;
 
-  async function togglePlayback() {
+  function togglePlayback() {
     if (hasRealAudio && audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        await audioRef.current.play();
-        setIsPlaying(true);
+      const audio = audioRef.current;
+
+      if (!audio.paused) {
+        audio.pause();
+        return;
       }
+
+      void audio.play().catch((error) => {
+        if (isBenignPlayError(error)) {
+          return;
+        }
+
+        console.error(error);
+        setIsPlaying(false);
+      });
 
       return;
     }
@@ -116,7 +163,35 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
     const bounded = Math.max(0, Math.min(nextTime, durationSeconds));
 
     if (hasRealAudio && audioRef.current) {
-      audioRef.current.currentTime = bounded;
+      const audio = audioRef.current;
+      const wasPlaying = !audio.paused;
+
+      // Резкий currentTime на играющем треке даёт щелчок/скрежет в браузере — кратко ставим на паузу.
+      if (wasPlaying) {
+        audio.pause();
+      }
+
+      if (typeof audio.fastSeek === "function") {
+        try {
+          audio.fastSeek(bounded);
+        } catch {
+          audio.currentTime = bounded;
+        }
+      } else {
+        audio.currentTime = bounded;
+      }
+
+      setCurrentTime(bounded);
+
+      if (wasPlaying) {
+        void audio.play().catch((error) => {
+          if (!isBenignPlayError(error)) {
+            console.error(error);
+          }
+        });
+      }
+
+      return;
     }
 
     setCurrentTime(bounded);
@@ -125,7 +200,7 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
   return (
     <div className="space-y-6">
       {audioUrl ? (
-        <audio ref={audioRef} preload="none">
+        <audio key={audioUrl} ref={audioRef} preload="none">
           <source src={audioUrl} />
         </audio>
       ) : null}
@@ -133,7 +208,7 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <button
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-cyan-400 text-lg font-semibold text-slate-950 transition hover:bg-cyan-300"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-cyan-400 text-lg font-semibold text-slate-950 transition-colors duration-150 hover:bg-cyan-300"
             onClick={() => {
               void togglePlayback();
             }}
@@ -160,7 +235,7 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
 
       <div className="space-y-3">
         <div className="h-3 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded-full bg-cyan-400" style={{ width: `${progress}%` }} />
         </div>
 
         <div className="flex items-center justify-between text-sm text-slate-300">
@@ -190,7 +265,7 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
           return (
             <button
               key={chapter.id}
-              className={`rounded-2xl border px-4 py-4 text-left transition ${
+              className={`rounded-2xl border px-4 py-4 text-left transition-colors duration-150 ${
                 isActive
                   ? "border-cyan-400/40 bg-cyan-400/10"
                   : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"

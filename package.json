@@ -4,6 +4,7 @@
   "private": true,
   "description": "Reddit Voice Digest MVP built with Next.js, Supabase, OpenAI, and Reddit API.",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

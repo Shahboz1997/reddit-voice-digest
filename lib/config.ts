@@ -21,6 +21,8 @@ const publicEnvSchema = z.object({
     emptyStringToUndefined,
     z.string().optional(),
   ),
+  /** Absolute or site-relative HTTPS URL for cover art (recommended 1400–3000 px square JPEG/PNG for Apple Podcasts). */
+  NEXT_PUBLIC_PODCAST_IMAGE_URL: z.preprocess(emptyStringToUndefined, z.string().optional()),
 });
 
 const serverEnvSchema = z.object({
@@ -51,6 +53,7 @@ export const publicEnv = publicEnvSchema.parse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  NEXT_PUBLIC_PODCAST_IMAGE_URL: process.env.NEXT_PUBLIC_PODCAST_IMAGE_URL,
 });
 
 export function getServerEnv() {

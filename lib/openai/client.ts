@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 import { getServerEnv } from "@/lib/config";
 import { buildDigestScriptPrompt, buildThreadSummaryPrompt } from "@/lib/prompts/digest";
+import type { PersonaId, SummaryDepthId } from "@/lib/types";
 
 const MAX_TTS_INPUT_CHARS = 3800;
 
@@ -45,6 +46,8 @@ export async function summarizeThread(input: {
   title: string;
   body: string;
   comments: string[];
+  persona?: PersonaId;
+  summaryDepth?: SummaryDepthId;
 }) {
   const { client, env } = getClient();
 
@@ -75,12 +78,16 @@ export async function summarizeThread(input: {
 
 export async function generateDigestScript(input: {
   dateLabel: string;
+  persona?: PersonaId;
+  summaryDepth?: SummaryDepthId;
   items: Array<{
     title: string;
     subreddit: string;
     whyItMatters: string;
     summary: string;
     keyTakeaways: string[];
+    segmentWeightPrimary?: boolean;
+    approxSecondsBudget?: number;
   }>;
 }) {
   const { client, env } = getClient();
@@ -111,15 +118,26 @@ export async function generateDigestScript(input: {
   };
 }
 
-export async function renderWithOpenAiTts(text: string) {
+export async function renderWithOpenAiTts(text: string, voiceOverride?: string) {
   const { client, env } = getClient();
+  const voice = (voiceOverride?.trim() || env.OPENAI_TTS_VOICE) as
+    | "alloy"
+    | "ash"
+    | "ballad"
+    | "coral"
+    | "echo"
+    | "fable"
+    | "nova"
+    | "onyx"
+    | "sage"
+    | "shimmer";
   const chunks = splitTextForTts(text);
   const buffers: Buffer[] = [];
 
   for (const chunk of chunks) {
     const response = await client.audio.speech.create({
       model: env.OPENAI_TTS_MODEL,
-      voice: env.OPENAI_TTS_VOICE,
+      voice,
       input: chunk,
       response_format: "mp3",
     });

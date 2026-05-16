@@ -14,7 +14,7 @@ export const demoEpisodes: DigestEpisode[] = [
     publishedAt: "2026-05-14T07:15:00.000Z",
     durationSeconds: 300,
     durationLabel: "5 min",
-    audioUrl: "",
+    audioUrl: "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
     topics: ["finance", "productivity", "startups"],
     keyThoughts: [
       "Protect focus windows before adding another productivity system.",

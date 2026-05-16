@@ -1,5 +1,7 @@
 export type DigestStatus = "queued" | "processing" | "completed" | "failed";
 export type NotificationChannelType = "telegram" | "rss";
+export type PersonaId = "bro_investor" | "scholar" | "news_anchor";
+export type SummaryDepthId = "short" | "standard" | "deep";
 
 export interface DigestChapter {
   id: string;
@@ -65,4 +67,9 @@ export interface NotificationPreference {
 export interface UserDigestPreferences {
   subreddits: string[];
   notifications: NotificationPreference[];
+  persona: PersonaId;
+  summaryDepth: SummaryDepthId;
+  deliveryLocalTime: string | null;
+  deliveryWeekdaysOnly: boolean;
+  personalRssUrl?: string | null;
 }
