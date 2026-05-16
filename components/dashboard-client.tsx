@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useSyncExternalStore } from "react";
 
 import { ArchiveSidebar } from "@/components/archive-sidebar";
+import { AuthHeader } from "@/components/auth-header";
 import { AudioPlayer } from "@/components/audio-player";
 import { BrandMark } from "@/components/brand-mark";
 import { KeyThoughtsPanel } from "@/components/key-thoughts-panel";
@@ -85,21 +86,13 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
         <BrandMark />
 
         <div className="flex flex-wrap items-center gap-3">
+          <AuthHeader />
           <Link
             className="inline-flex rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
             href="/settings"
           >
             Configure my subreddits
           </Link>
-          <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-slate-950/60 px-4 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-400 text-sm font-semibold text-slate-950">
-              RV
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">Demo profile</p>
-              <p className="text-xs text-slate-400">Supabase Auth ready</p>
-            </div>
-          </div>
         </div>
       </header>
 

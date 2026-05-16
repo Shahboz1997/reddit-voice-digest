@@ -37,56 +37,89 @@ interface ThreadRow {
   subreddit_name: string;
 }
 
+async function fetchPublishedEpisodes(
+  filter:
+    | { kind: "public" }
+    | {
+        kind: "owner";
+        ownerUserId: string;
+      },
+): Promise<DigestEpisode[] | null> {
+  const supabase = createAdminSupabaseClient();
+  let query = supabase
+    .from("digests")
+    .select(
+      "id, slug, title, intro_text, summary_text, transcript_text, audio_url, duration_seconds, published_at, topics",
+    )
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false });
+
+  if (filter.kind === "public") {
+    query = query.is("owner_user_id", null);
+  } else {
+    query = query.eq("owner_user_id", filter.ownerUserId);
+  }
+
+  const { data: digests, error: digestsError } = await query;
+
+  if (digestsError || !(digests ?? []).length) {
+    return null;
+  }
+
+  const digestIds = (digests as DigestRow[]).map((digest) => digest.id);
+  const { data: digestItems, error: digestItemsError } = await supabase
+    .from("digest_items")
+    .select(
+      "id, digest_id, thread_id, position, thread_summary, key_takeaways, tldr_points, why_it_matters, reddit_thread_url, reddit_comment_url, audio_start_seconds, audio_end_seconds",
+    )
+    .in("digest_id", digestIds)
+    .order("position", { ascending: true });
+
+  if (digestItemsError) {
+    return null;
+  }
+
+  const threadIds = Array.from(
+    new Set(
+      ((digestItems ?? []) as DigestItemRow[])
+        .map((item) => item.thread_id)
+        .filter((threadId): threadId is string => Boolean(threadId)),
+    ),
+  );
+
+  const { data: threads } = threadIds.length
+    ? await supabase.from("threads").select("id, title, subreddit_name").in("id", threadIds)
+    : { data: [] as ThreadRow[] };
+
+  const threadMap = new Map(((threads ?? []) as ThreadRow[]).map((thread) => [thread.id, thread]));
+
+  return (digests as DigestRow[]).map((digest) => mapDigestRowToEpisode(digest, digestItems as DigestItemRow[], threadMap));
+}
+
 export async function getPublishedDigests() {
   if (!hasSupabaseAdminEnv()) {
     return demoEpisodes;
   }
 
   try {
-    const supabase = createAdminSupabaseClient();
-    const { data: digests, error: digestsError } = await supabase
-      .from("digests")
-      .select(
-        "id, slug, title, intro_text, summary_text, transcript_text, audio_url, duration_seconds, published_at, topics",
-      )
-      .is("owner_user_id", null)
-      .not("published_at", "is", null)
-      .order("published_at", { ascending: false });
-
-    if (digestsError || !(digests ?? []).length) {
-      return demoEpisodes;
-    }
-
-    const digestIds = (digests as DigestRow[]).map((digest) => digest.id);
-    const { data: digestItems, error: digestItemsError } = await supabase
-      .from("digest_items")
-      .select(
-        "id, digest_id, thread_id, position, thread_summary, key_takeaways, tldr_points, why_it_matters, reddit_thread_url, reddit_comment_url, audio_start_seconds, audio_end_seconds",
-      )
-      .in("digest_id", digestIds)
-      .order("position", { ascending: true });
-
-    if (digestItemsError) {
-      return demoEpisodes;
-    }
-
-    const threadIds = Array.from(
-      new Set(
-        ((digestItems ?? []) as DigestItemRow[])
-          .map((item) => item.thread_id)
-          .filter((threadId): threadId is string => Boolean(threadId)),
-      ),
-    );
-
-    const { data: threads } = threadIds.length
-      ? await supabase.from("threads").select("id, title, subreddit_name").in("id", threadIds)
-      : { data: [] as ThreadRow[] };
-
-    const threadMap = new Map(((threads ?? []) as ThreadRow[]).map((thread) => [thread.id, thread]));
-
-    return (digests as DigestRow[]).map((digest) => mapDigestRowToEpisode(digest, digestItems as DigestItemRow[], threadMap));
+    const episodes = await fetchPublishedEpisodes({ kind: "public" });
+    return episodes?.length ? episodes : demoEpisodes;
   } catch {
     return demoEpisodes;
+  }
+}
+
+/** Personal digests for RSS token resolution (service role); empty if none. */
+export async function getPublishedDigestsForOwner(ownerUserId: string): Promise<DigestEpisode[]> {
+  if (!hasSupabaseAdminEnv()) {
+    return [];
+  }
+
+  try {
+    const episodes = await fetchPublishedEpisodes({ kind: "owner", ownerUserId });
+    return episodes ?? [];
+  } catch {
+    return [];
   }
 }
 

@@ -103,7 +103,10 @@ export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
         <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Notifications</p>
         <h2 className="mt-2 text-xl font-semibold text-white">Smart delivery</h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          RSS is live now. Telegram is scaffolded in preferences so you can wire a bot when ready.
+          RSS follows the Apple Podcasts schema: paste the URL into Spotify (&quot;Add by RSS&quot;) or Apple
+          Podcasts (&quot;Follow Show by URL&quot;). Default share URL uses{" "}
+          <span className="text-cyan-100/90">/podcast.rss</span> (
+          <span className="text-slate-400">canonical XML: /rss.xml</span>). Telegram is scaffolded in preferences.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -111,7 +114,7 @@ export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
             className="inline-flex rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300"
             href={rssUrl}
           >
-            Open RSS feed
+            Podcast RSS (copy URL)
           </a>
           <Link
             className="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"

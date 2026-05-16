@@ -1,12 +1,17 @@
 import { availableSubreddits } from "@/lib/catalog";
 import { getServerEnv } from "@/lib/config";
+import {
+  allocateChapterSeconds,
+  depthCommentSampleCount,
+  depthTargetEpisodeSeconds,
+  personaOpenAiTtsVoice,
+} from "@/lib/digest-persona";
 import { formatDigestDate } from "@/lib/date";
 import { renderPodcastAudio } from "@/lib/audio/provider";
 import { generateDigestScript, summarizeThread } from "@/lib/openai/client";
 import { fetchThreadComments, fetchTopThreads, type RedditComment, type RedditThread } from "@/lib/reddit/client";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-
-const DIGEST_DURATION_SECONDS = 300;
+import type { PersonaId, SummaryDepthId } from "@/lib/types";
 const MIN_COMMENTS_PRIMARY = 100;
 const MIN_COMMENTS_FALLBACK = 30;
 const DEFAULT_THREADS_PER_SOURCE = 8;
@@ -28,6 +33,9 @@ interface PipelineOptions {
   selectedSubreddits?: string[];
   threadsPerSource?: number;
   maxThreadsPerDigest?: number;
+  persona?: PersonaId;
+  summaryDepth?: SummaryDepthId;
+  ownerUserId?: string | null;
 }
 
 interface SummarizedThread {
@@ -60,29 +68,29 @@ export async function runDigestPipeline(options: PipelineOptions = {}): Promise<
   });
   const maxThreads = options.maxThreadsPerDigest ?? MAX_THREADS_PER_DIGEST;
   const threadsPerSource = options.threadsPerSource ?? DEFAULT_THREADS_PER_SOURCE;
+  const persona = options.persona ?? "news_anchor";
+  const summaryDepth = options.summaryDepth ?? "standard";
+  const digestDurationSeconds = depthTargetEpisodeSeconds(summaryDepth);
 
   const digestRun = await upsertDigestRun(supabase, runDateKey);
 
   try {
     const sources = await loadSources(supabase, options.selectedSubreddits);
     const selectedSubreddits = sources.map((source) => source.subreddit_name);
-    const rankedThreads = await fetchRankedThreads(selectedSubreddits, threadsPerSource);
-    const candidateThreads = rankedThreads
-      .filter((thread) => thread.numComments >= MIN_COMMENTS_PRIMARY)
-      .slice(0, maxThreads);
-    const finalThreads =
-      candidateThreads.length >= maxThreads
-        ? candidateThreads
-        : rankedThreads.filter((thread) => thread.numComments >= MIN_COMMENTS_FALLBACK).slice(0, maxThreads);
+    const finalThreads = await fetchThreadsPrioritized(selectedSubreddits, threadsPerSource, maxThreads);
 
     if (!finalThreads.length) {
       throw new Error("No Reddit threads met the minimum comment threshold for digest generation.");
     }
 
+    const commentBudget = depthCommentSampleCount(summaryDepth);
+
     const persistedThreads = await persistThreads(supabase, finalThreads, sources);
     const summarizedThreads = await Promise.all(
       finalThreads.map(async (thread) => {
-        const comments = (await fetchThreadComments(thread.redditPostId, 20)).slice(0, 10);
+        const comments = (
+          await fetchThreadComments(thread.redditPostId, Math.max(commentBudget + 12, 32))
+        ).slice(0, commentBudget);
 
         if (!comments.length) {
           throw new Error(`No usable comments returned for Reddit post ${thread.redditPostId}.`);
@@ -93,6 +101,8 @@ export async function runDigestPipeline(options: PipelineOptions = {}): Promise<
           title: thread.title,
           body: thread.selftext || thread.title,
           comments: comments.map((comment) => comment.body),
+          persona,
+          summaryDepth,
         });
 
         await persistComments(supabase, persistedThreads.get(thread.redditPostId) ?? "", thread, comments);
@@ -107,22 +117,30 @@ export async function runDigestPipeline(options: PipelineOptions = {}): Promise<
       }),
     );
 
+    const chapterLengths = allocateChapterSeconds(summarizedThreads.length, digestDurationSeconds);
+
     const digestScript = await generateDigestScript({
       dateLabel: runDateLabel,
-      items: summarizedThreads.map((item) => ({
+      persona,
+      summaryDepth,
+      items: summarizedThreads.map((item, index) => ({
         title: item.thread.title,
         subreddit: item.thread.subredditName,
         whyItMatters: item.whyItMatters,
         summary: item.summary,
         keyTakeaways: item.keyTakeaways,
+        segmentWeightPrimary: index === 0,
+        approxSecondsBudget: chapterLengths[index],
       })),
     });
 
-    const audioBuffer = await renderPodcastAudio(digestScript.full_script);
-    const audioPath = `${runDateKey}/main.mp3`;
+    const voice = personaOpenAiTtsVoice(persona);
+    const audioBuffer = await renderPodcastAudio(digestScript.full_script, { voice });
+    const ownerPart = options.ownerUserId ? `-${options.ownerUserId.replace(/-/g, "").slice(0, 8)}` : "";
+    const audioPath = `${runDateKey}/main${ownerPart}.mp3`;
     const audioUrl = await uploadDigestAudio(supabase, env.SUPABASE_STORAGE_BUCKET, audioPath, audioBuffer);
 
-    const slug = `main-insights-from-reddit-${runDateKey}`;
+    const slug = `main-insights-from-reddit-${runDateKey}${ownerPart}`;
     const digestId = await persistDigest(
       supabase,
       digestRun.id,
@@ -132,6 +150,9 @@ export async function runDigestPipeline(options: PipelineOptions = {}): Promise<
       audioUrl,
       summarizedThreads,
       persistedThreads,
+      digestDurationSeconds,
+      chapterLengths,
+      options.ownerUserId ?? undefined,
     );
 
     await markDigestRunCompleted(supabase, digestRun.id);
@@ -186,10 +207,18 @@ async function loadSources(
   const sourceRows = (data ?? []) as SourceRow[];
 
   if (sourceRows.length) {
+    if (selectedSubreddits?.length) {
+      const orderMap = new Map(selectedSubreddits.map((name, idx) => [name.toLowerCase(), idx]));
+      sourceRows.sort(
+        (a, b) =>
+          (orderMap.get(a.subreddit_name.toLowerCase()) ?? 999) -
+          (orderMap.get(b.subreddit_name.toLowerCase()) ?? 999),
+      );
+    }
     return sourceRows;
   }
 
-  return availableSubreddits
+  const fallbackRows = availableSubreddits
     .filter((item) => item.is_active)
     .filter((item) => !selectedSubreddits?.length || selectedSubreddits.includes(item.subreddit_name))
     .map((item) => ({
@@ -197,20 +226,75 @@ async function loadSources(
       subreddit_name: item.subreddit_name,
       priority: item.priority,
     }));
+
+  if (selectedSubreddits?.length) {
+    const orderMap = new Map(selectedSubreddits.map((name, idx) => [name.toLowerCase(), idx]));
+    fallbackRows.sort(
+      (a, b) =>
+        (orderMap.get(a.subreddit_name.toLowerCase()) ?? 999) -
+        (orderMap.get(b.subreddit_name.toLowerCase()) ?? 999),
+    );
+  }
+
+  return fallbackRows;
 }
 
-async function fetchRankedThreads(subreddits: string[], threadsPerSource: number) {
+async function fetchThreadsPrioritized(
+  orderedSubreddits: string[],
+  threadsPerSource: number,
+  maxThreads: number,
+): Promise<RedditThread[]> {
   const threadGroups = await Promise.all(
-    subreddits.map((subreddit) => fetchTopThreads(subreddit, threadsPerSource)),
+    orderedSubreddits.map((subreddit) => fetchTopThreads(subreddit, threadsPerSource)),
   );
 
-  return threadGroups
-    .flat()
-    .sort((left, right) => right.rankingScore - left.rankingScore)
-    .filter(
-      (thread, index, threads) =>
-        threads.findIndex((candidate) => candidate.redditPostId === thread.redditPostId) === index,
-    );
+  const buckets = threadGroups.map((threads) =>
+    [...threads].sort((left, right) => right.rankingScore - left.rankingScore),
+  );
+
+  const picked: RedditThread[] = [];
+  const taken = new Set<string>();
+
+  const qualifies = (thread: RedditThread, strict: boolean) =>
+    strict ? thread.numComments >= MIN_COMMENTS_PRIMARY : thread.numComments >= MIN_COMMENTS_FALLBACK;
+
+  function sweep(strict: boolean) {
+    for (let round = 0; round < threadsPerSource && picked.length < maxThreads; round++) {
+      for (let bi = 0; bi < buckets.length && picked.length < maxThreads; bi++) {
+        const thread = buckets[bi][round];
+        if (!thread || taken.has(thread.redditPostId) || !qualifies(thread, strict)) {
+          continue;
+        }
+
+        picked.push(thread);
+        taken.add(thread.redditPostId);
+      }
+    }
+  }
+
+  sweep(true);
+  if (picked.length < maxThreads) {
+    sweep(false);
+  }
+
+  if (!picked.length) {
+    const flat = buckets.flat().sort((left, right) => right.rankingScore - left.rankingScore);
+
+    for (const thread of flat) {
+      if (picked.length >= maxThreads) {
+        break;
+      }
+
+      if (taken.has(thread.redditPostId) || thread.numComments < MIN_COMMENTS_FALLBACK) {
+        continue;
+      }
+
+      picked.push(thread);
+      taken.add(thread.redditPostId);
+    }
+  }
+
+  return picked.slice(0, maxThreads);
 }
 
 async function persistThreads(
@@ -304,6 +388,9 @@ async function persistDigest(
   audioUrl: string,
   summarizedThreads: SummarizedThread[],
   persistedThreads: Map<string, string>,
+  digestDurationSeconds: number,
+  chapterLengths: number[],
+  ownerUserId?: string | null,
 ) {
   const publishedAt = new Date().toISOString();
   const topics = summarizedThreads.map((item) => mapSubredditToTopic(item.thread.subredditName));
@@ -314,6 +401,7 @@ async function persistDigest(
     .upsert(
       {
         digest_run_id: digestRunId,
+        owner_user_id: ownerUserId ?? null,
         title: digestScript.digest_title,
         slug,
         intro_text: digestScript.intro,
@@ -323,7 +411,7 @@ async function persistDigest(
         topics,
         audio_url: audioUrl,
         audio_storage_path: audioPath,
-        duration_seconds: DIGEST_DURATION_SECONDS,
+        duration_seconds: digestDurationSeconds,
         published_at: publishedAt,
       },
       { onConflict: "slug" },
@@ -335,10 +423,12 @@ async function persistDigest(
     throw new Error(`Failed to persist digest row: ${digestError?.message ?? "Missing digest row."}`);
   }
 
-  const chapterDuration = Math.floor(DIGEST_DURATION_SECONDS / summarizedThreads.length);
+  let cursor = 0;
   const digestItemsPayload = summarizedThreads.map((item, index) => {
-    const startSeconds = index * chapterDuration;
-    const endSeconds = index === summarizedThreads.length - 1 ? DIGEST_DURATION_SECONDS : (index + 1) * chapterDuration;
+    const slice = chapterLengths[index] ?? Math.floor(digestDurationSeconds / summarizedThreads.length);
+    const startSeconds = cursor;
+    const endSeconds = cursor + slice;
+    cursor = endSeconds;
     const topComment = item.comments[0];
 
     return {
@@ -352,7 +442,7 @@ async function persistDigest(
       reddit_thread_url: item.thread.permalink,
       reddit_comment_url: topComment ? `${item.thread.permalink}${topComment.redditCommentId}/` : null,
       audio_start_seconds: startSeconds,
-      audio_end_seconds: endSeconds,
+      audio_end_seconds: Math.min(endSeconds, digestDurationSeconds),
     };
   });
 

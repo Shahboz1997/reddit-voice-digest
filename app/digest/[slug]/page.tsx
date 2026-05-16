@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AuthHeader } from "@/components/auth-header";
 import { AudioPlayer } from "@/components/audio-player";
 import { BrandMark } from "@/components/brand-mark";
 import { KeyThoughtsPanel } from "@/components/key-thoughts-panel";
@@ -25,12 +26,15 @@ export default async function DigestPage({ params }: DigestPageProps) {
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-6 py-10 lg:px-10">
       <header className="flex flex-col gap-5 rounded-[2rem] border border-white/10 bg-white/5 p-6 md:flex-row md:items-center md:justify-between">
         <BrandMark />
-        <Link
-          className="inline-flex rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
-          href="/"
-        >
-          Back to dashboard
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <AuthHeader />
+          <Link
+            className="inline-flex rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
+            href="/"
+          >
+            Back to dashboard
+          </Link>
+        </div>
       </header>
 
       <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8">

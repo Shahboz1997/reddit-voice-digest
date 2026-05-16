@@ -1,11 +1,11 @@
 import { getServerEnv } from "@/lib/config";
 import { renderWithOpenAiTts } from "@/lib/openai/client";
 
-export async function renderPodcastAudio(text: string) {
+export async function renderPodcastAudio(text: string, opts?: { voice?: string }) {
   const env = getServerEnv();
 
   if (env.AUDIO_PROVIDER === "openai") {
-    return renderWithOpenAiTts(text);
+    return renderWithOpenAiTts(text, opts?.voice);
   }
 
   if (!env.ASSEMBLYAI_API_KEY) {

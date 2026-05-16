@@ -1,51 +1,46 @@
-import { demoEpisodes } from "@/lib/demo-data";
 import { publicEnv } from "@/lib/config";
+import { getPublishedDigests } from "@/lib/data/digests";
+import type { DigestEpisode } from "@/lib/types";
+import {
+  assemblePodcastRssXml,
+  canonicalPodcastGuidForFeed,
+  isPlayablePodcastEpisode,
+  mergedPublicPodcastChannel,
+} from "@/lib/podcast/feed-xml";
 
-function escapeXml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+export const dynamic = "force-dynamic";
+
+export const runtime = "nodejs";
+
+function hasPlayableAudioUrl(episode: DigestEpisode): episode is DigestEpisode & { audioUrl: string } {
+  return isPlayablePodcastEpisode(episode);
 }
 
 export async function GET() {
-  const baseUrl = publicEnv.NEXT_PUBLIC_APP_URL;
-  const items = demoEpisodes
-    .map((episode) => {
-      const episodeUrl = `${baseUrl}/digest/${episode.slug}`;
-      const enclosure = episode.audioUrl
-        ? `<enclosure url="${escapeXml(episode.audioUrl)}" type="audio/mpeg" />`
-        : "";
+  const baseUrl = publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  const feedUrl = `${baseUrl}/rss.xml`;
 
-      return `
-        <item>
-          <title>${escapeXml(episode.title)}</title>
-          <link>${escapeXml(episodeUrl)}</link>
-          <guid>${escapeXml(episodeUrl)}</guid>
-          <pubDate>${new Date(episode.publishedAt).toUTCString()}</pubDate>
-          <description>${escapeXml(episode.summary)}</description>
-          ${enclosure}
-        </item>
-      `;
-    })
-    .join("");
+  const all = await getPublishedDigests();
+  const playable = all.filter(hasPlayableAudioUrl);
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Reddit Voice Digest</title>
-    <link>${escapeXml(baseUrl)}</link>
-    <description>Daily short podcast summaries of long Reddit threads.</description>
-    <language>en-us</language>
-    ${items}
-  </channel>
-</rss>`;
+  const rssOrder = [...playable].sort(
+    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+  );
+
+  const podcastGuid = canonicalPodcastGuidForFeed(feedUrl);
+
+  const channel = mergedPublicPodcastChannel({
+    baseUrl,
+    feedUrl,
+    podcastGuid,
+  });
+
+  const xml = await assemblePodcastRssXml(rssOrder, channel);
 
   return new Response(xml, {
     headers: {
       "Content-Type": "application/rss+xml; charset=utf-8",
+      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
     },
   });
 }

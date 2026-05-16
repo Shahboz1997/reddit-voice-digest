@@ -21,7 +21,8 @@ export const defaultNotificationPreferences: NotificationPreference[] = [
     channelType: "rss",
     label: "Podcast RSS",
     isEnabled: true,
-    helperText: "Use this feed in Apple Podcasts, Google Podcasts replacements, or any RSS app.",
+    helperText:
+      "Paste your site’s /podcast.rss (alias of /rss.xml) into Apple Podcasts, Spotify “Add by RSS”, or any podcast app.",
     targetValue: "",
   },
   {
