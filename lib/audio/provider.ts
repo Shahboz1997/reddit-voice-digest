@@ -1,11 +1,24 @@
 import { getServerEnv } from "@/lib/config";
+import { renderWithElevenLabsTts } from "@/lib/elevenlabs/client";
 import { renderWithOpenAiTts } from "@/lib/openai/client";
+import type { PersonaId } from "@/lib/types";
 
-export async function renderPodcastAudio(text: string, opts?: { voice?: string }) {
+export async function renderPodcastAudio(
+  text: string,
+  opts?: { voice?: string; persona?: PersonaId; elevenlabsVoiceOverride?: string | null },
+) {
   const env = getServerEnv();
 
   if (env.AUDIO_PROVIDER === "openai") {
     return renderWithOpenAiTts(text, opts?.voice);
+  }
+
+  if (env.AUDIO_PROVIDER === "elevenlabs") {
+    return renderWithElevenLabsTts(text, {
+      voice: opts?.voice,
+      persona: opts?.persona,
+      elevenlabsVoiceOverride: opts?.elevenlabsVoiceOverride,
+    });
   }
 
   if (!env.ASSEMBLYAI_API_KEY) {

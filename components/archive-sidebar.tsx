@@ -9,6 +9,7 @@ import type { DigestEpisode } from "@/lib/types";
 interface ArchiveSidebarProps {
   episodes: DigestEpisode[];
   rssUrl: string;
+  variant?: "default" | "radio";
 }
 
 function formatShortDate(value: string) {
@@ -18,7 +19,8 @@ function formatShortDate(value: string) {
   });
 }
 
-export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
+export function ArchiveSidebar({ episodes, rssUrl, variant = "default" }: ArchiveSidebarProps) {
+  const isRadio = variant === "radio";
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -45,12 +47,22 @@ export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
 
   return (
     <aside className="space-y-6">
-      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-        <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Archive</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">Past issues and search</h2>
+      <section
+        className={`rounded-2xl p-5 ${isRadio ? "radio-glass" : "rounded-[2rem] border border-white/10 bg-white/5"}`}
+      >
+        <p
+          className={`font-display text-[10px] font-bold uppercase tracking-[0.35em] ${isRadio ? "text-[var(--radio-yellow)]" : "text-sm tracking-[0.24em] text-cyan-300"}`}
+        >
+          Archive
+        </p>
+        <h2
+          className={`mt-2 font-display font-extrabold uppercase tracking-wide text-white ${isRadio ? "text-lg" : "text-xl font-semibold normal-case"}`}
+        >
+          Past issues and search
+        </h2>
 
         <input
-          className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-300/40"
+          className={`mt-4 w-full rounded-xl border border-white/10 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 ${isRadio ? "bg-black/60 focus:border-[var(--radio-pink)]/50" : "rounded-2xl bg-slate-950/70 focus:border-cyan-300/40"}`}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search topics or keywords"
           type="search"
@@ -99,8 +111,12 @@ export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-        <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Notifications</p>
+      <section className={`rounded-2xl p-5 ${isRadio ? "radio-glass" : "rounded-[2rem] border border-white/10 bg-white/5"}`}>
+        <p
+          className={`font-display text-[10px] font-bold uppercase tracking-[0.35em] ${isRadio ? "text-[var(--radio-yellow)]" : "text-sm tracking-[0.24em] text-cyan-300"}`}
+        >
+          Notifications
+        </p>
         <h2 className="mt-2 text-xl font-semibold text-white">Smart delivery</h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
           RSS follows the Apple Podcasts schema: paste the URL into Spotify (&quot;Add by RSS&quot;) or Apple
@@ -111,7 +127,11 @@ export function ArchiveSidebar({ episodes, rssUrl }: ArchiveSidebarProps) {
 
         <div className="mt-5 flex flex-wrap gap-3">
           <a
-            className="inline-flex rounded-full bg-cyan-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300"
+            className={`inline-flex rounded-full px-4 py-2 font-display text-xs font-bold uppercase tracking-wider transition ${
+              isRadio
+                ? "bg-[var(--radio-pink)] text-black hover:brightness-110"
+                : "bg-cyan-400 text-sm font-medium text-slate-950 hover:bg-cyan-300"
+            }`}
             href={rssUrl}
           >
             Podcast RSS (copy URL)

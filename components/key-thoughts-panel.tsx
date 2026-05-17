@@ -7,9 +7,11 @@ import type { DigestEpisode } from "@/lib/types";
 
 interface KeyThoughtsPanelProps {
   episode: DigestEpisode;
+  variant?: "default" | "radio";
 }
 
-export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
+export function KeyThoughtsPanel({ episode, variant = "default" }: KeyThoughtsPanelProps) {
+  const isRadio = variant === "radio";
   const [activeTab, setActiveTab] = useState<"thoughts" | "transcript">("thoughts");
   const [shareCardId, setShareCardId] = useState<string | null>(null);
 
@@ -29,7 +31,9 @@ export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
   const shareCard = shareCardId ? (insightCards.find((c) => c.id === shareCardId) ?? null) : null;
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+    <section
+      className={`rounded-2xl p-6 ${isRadio ? "radio-glass" : "rounded-[2rem] border border-white/10 bg-white/5"}`}
+    >
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Text cards</p>
@@ -79,7 +83,7 @@ export function KeyThoughtsPanel({ episode }: KeyThoughtsPanelProps) {
                   onClick={() => setShareCardId(card.id)}
                   type="button"
                 >
-                  Поделиться инсайтом
+                  Share insight
                 </button>
                 <a
                   className="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-white transition hover:border-cyan-300/40 hover:text-cyan-200"

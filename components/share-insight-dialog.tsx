@@ -264,12 +264,12 @@ export function ShareInsightDialog({
     const opts: { id: string; label: string; text: string }[] = [];
     const s = summary.trim();
     if (s) {
-      opts.push({ id: "summary", label: "Краткое резюме", text: s });
+      opts.push({ id: "summary", label: "Short summary", text: s });
     }
     tldrPoints.forEach((p, i) => {
       const t = p.trim();
       if (t) {
-        opts.push({ id: `tldr-${i}`, label: `Инсайт ${i + 1}`, text: t });
+        opts.push({ id: `tldr-${i}`, label: `Insight ${i + 1}`, text: t });
       }
     });
     return opts;
@@ -345,7 +345,7 @@ export function ShareInsightDialog({
     try {
       const blob = await getBlob();
       if (!blob) {
-        setStatus("Не удалось создать изображение.");
+        setStatus("Could not create image.");
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -365,22 +365,22 @@ export function ShareInsightDialog({
     try {
       const blob = await getBlob();
       if (!blob) {
-        setStatus("Не удалось создать изображение.");
+        setStatus("Could not create image.");
         return;
       }
       const file = new File([blob], filename, { type: "image/png" });
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: "Инсайт из Reddit Voice Digest",
+          title: "Insight from Reddit Voice Digest",
           text: activeQuote?.text.slice(0, 200) ?? "",
         });
       } else {
-        setStatus("Общий доступ к файлам недоступен в этом браузере — скачайте PNG.");
+        setStatus("File sharing is not available in this browser — download the PNG instead.");
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
-        setStatus("Не удалось открыть меню «Поделиться».");
+        setStatus("Could not open the share menu.");
       }
     } finally {
       setBusy(false);
@@ -399,7 +399,7 @@ export function ShareInsightDialog({
       role="dialog"
     >
       <button
-        aria-label="Закрыть"
+        aria-label="Close"
         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
         onClick={onClose}
         type="button"
@@ -409,25 +409,25 @@ export function ShareInsightDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-cyan-300" id="share-insight-title">
-              Поделиться инсайтом
+              Share insight
             </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Картинка для X / Stories</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">Image for X / Stories</h3>
           </div>
           <button
             className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:border-cyan-300/40 hover:text-white"
             onClick={onClose}
             type="button"
           >
-            Закрыть
+            Close
           </button>
         </div>
 
         {!activeQuote ? (
-          <p className="mt-6 text-sm text-slate-400">Нет текста для цитаты в этой карточке.</p>
+          <p className="mt-6 text-sm text-slate-400">No quote text available for this card.</p>
         ) : (
           <>
             <label className="mt-6 block text-sm font-medium text-slate-300" htmlFor="share-quote-select">
-              Текст на картинке
+              Text on image
             </label>
             <select
               className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/40"
@@ -442,7 +442,7 @@ export function ShareInsightDialog({
               ))}
             </select>
 
-            <p className="mt-6 text-sm font-medium text-slate-300">Формат</p>
+            <p className="mt-6 text-sm font-medium text-slate-300">Format</p>
             <div className="mt-2 inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1">
               <button
                 className={`rounded-full px-4 py-2 text-sm ${
@@ -480,7 +480,7 @@ export function ShareInsightDialog({
                 onClick={onDownload}
                 type="button"
               >
-                Скачать PNG
+                Download PNG
               </button>
               <button
                 className="inline-flex flex-1 min-w-[140px] items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition hover:border-cyan-300/40 hover:text-cyan-100 disabled:opacity-50"
@@ -488,7 +488,7 @@ export function ShareInsightDialog({
                 onClick={onShare}
                 type="button"
               >
-                Системное «Поделиться»
+                System share
               </button>
             </div>
           </>

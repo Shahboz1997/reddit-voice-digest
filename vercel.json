@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/delivery/process-due",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/pipeline/cron",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}

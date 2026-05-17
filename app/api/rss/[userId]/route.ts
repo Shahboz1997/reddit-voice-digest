@@ -9,7 +9,7 @@ import {
 
 /**
  * Per-account RSS by Auth UUID (`GET /api/rss/{uuid}`).
- * URL не требует cookies — удобно для плееров. Менее приватно, чем `/rss/{rss_feed_token}.xml`.
+ * URL does not require cookies — convenient for players. Less private than `/rss/{rss_feed_token}.xml`.
  */
 
 const UUID_RE =
@@ -39,10 +39,10 @@ export async function GET(
     baseUrl,
     feedUrl,
     podcastGuid: canonicalPodcastGuidForFeed(feedUrl),
-    podcastTitle: "Reddit Voice Digest — ваш подбор",
-    podcastSubtitle: "Подкаст-фид по выпускам пользователя",
+    podcastTitle: "Reddit Voice Digest — your lineup",
+    podcastSubtitle: "Podcast feed for this user's episodes",
     podcastSummary:
-      "Фид по UUID аккаунта: только опубликованные персональные выпуски этого пользователя. Для большей приватности используйте секретный адрес /rss/{token}.xml из профиля.",
+      "Feed by account UUID: only published personal episodes for this user. For more privacy, use the secret /rss/{token}.xml URL from your profile.",
   });
 
   const xml = await assemblePodcastRssXml(playable, channel);

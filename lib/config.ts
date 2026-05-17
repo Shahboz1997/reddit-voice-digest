@@ -43,9 +43,33 @@ const serverEnvSchema = z.object({
   REDDIT_USER_AGENT: z.preprocess(emptyStringToUndefined, z.string().min(1)),
   AUDIO_PROVIDER: z.preprocess(
     emptyStringToUndefined,
-    z.enum(["openai", "assemblyai"]).default("openai"),
+    z.enum(["openai", "elevenlabs", "assemblyai"]).default("openai"),
   ),
   ASSEMBLYAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ELEVENLABS_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ELEVENLABS_MODEL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().default("eleven_multilingual_v2"),
+  ),
+  /** Default premade voice (George). Persona mapping overrides when persona is passed to TTS. */
+  ELEVENLABS_VOICE: z.preprocess(
+    emptyStringToUndefined,
+    z.string().default("JBFqnCBsd6RMkjVDRZzb"),
+  ),
+  ELEVENLABS_OUTPUT_FORMAT: z.preprocess(
+    emptyStringToUndefined,
+    z.string().default("mp3_44100_128"),
+  ),
+  ELEVENLABS_STABILITY: z.preprocess(emptyStringToUndefined, z.coerce.number().default(0.42)),
+  ELEVENLABS_SIMILARITY_BOOST: z.preprocess(emptyStringToUndefined, z.coerce.number().default(0.78)),
+  ELEVENLABS_STYLE: z.preprocess(emptyStringToUndefined, z.coerce.number().default(0.35)),
+  ELEVENLABS_SPEED: z.preprocess(emptyStringToUndefined, z.coerce.number().default(1)),
+  ELEVENLABS_VOICE_HOST_A: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ELEVENLABS_VOICE_HOST_B: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  DIGEST_SCRIPT_MODE: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(["dialogue", "monologue"]).default("dialogue"),
+  ),
 });
 
 export const publicEnv = publicEnvSchema.parse({
@@ -69,7 +93,30 @@ export function getServerEnv() {
     REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
     AUDIO_PROVIDER: process.env.AUDIO_PROVIDER,
     ASSEMBLYAI_API_KEY: process.env.ASSEMBLYAI_API_KEY,
+    ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+    ELEVENLABS_MODEL: process.env.ELEVENLABS_MODEL,
+    ELEVENLABS_VOICE: process.env.ELEVENLABS_VOICE,
+    ELEVENLABS_OUTPUT_FORMAT: process.env.ELEVENLABS_OUTPUT_FORMAT,
+    ELEVENLABS_STABILITY: process.env.ELEVENLABS_STABILITY,
+    ELEVENLABS_SIMILARITY_BOOST: process.env.ELEVENLABS_SIMILARITY_BOOST,
+    ELEVENLABS_STYLE: process.env.ELEVENLABS_STYLE,
+    ELEVENLABS_SPEED: process.env.ELEVENLABS_SPEED,
+    ELEVENLABS_VOICE_HOST_A: process.env.ELEVENLABS_VOICE_HOST_A,
+    ELEVENLABS_VOICE_HOST_B: process.env.ELEVENLABS_VOICE_HOST_B,
+    DIGEST_SCRIPT_MODE: process.env.DIGEST_SCRIPT_MODE,
   });
+}
+
+export type ServerEnv = ReturnType<typeof getServerEnv>;
+
+export function elevenLabsDefaultVoiceSettings(env: ServerEnv) {
+  return {
+    stability: env.ELEVENLABS_STABILITY,
+    similarity_boost: env.ELEVENLABS_SIMILARITY_BOOST,
+    style: env.ELEVENLABS_STYLE,
+    speed: env.ELEVENLABS_SPEED,
+    use_speaker_boost: true,
+  };
 }
 
 export function hasSupabaseBrowserEnv() {

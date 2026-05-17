@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { DigestChapter } from "@/lib/types";
+import { BroadcastPlaylist } from "@/components/broadcast-playlist";
+import { PlaybackAudioVisualizer } from "@/components/playback-audio-visualizer";
+import type { DigestChapter, DigestItem } from "@/lib/types";
 
 interface AudioPlayerProps {
   audioUrl?: string;
   durationSeconds: number;
   chapters: DigestChapter[];
+  playlistItems?: DigestItem[];
+  variant?: "default" | "radio";
+  nowPlayingTitle?: string;
+  onPlaybackChange?: (isPlaying: boolean) => void;
 }
 
 function formatTime(totalSeconds: number) {
@@ -25,12 +31,25 @@ function isBenignPlayError(error: unknown) {
   return dom.name === "AbortError" || dom.name === "NotAllowedError";
 }
 
-export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayerProps) {
+export function AudioPlayer({
+  audioUrl,
+  durationSeconds,
+  chapters,
+  playlistItems = [],
+  variant = "default",
+  nowPlayingTitle,
+  onPlaybackChange,
+}: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasRealAudio = Boolean(audioUrl);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const isRadio = variant === "radio";
+
+  useEffect(() => {
+    onPlaybackChange?.(isPlaying);
+  }, [isPlaying, onPlaybackChange]);
 
   useEffect(() => {
     if (!hasRealAudio) {
@@ -166,7 +185,6 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
       const audio = audioRef.current;
       const wasPlaying = !audio.paused;
 
-      // Резкий currentTime на играющем треке даёт щелчок/скрежет в браузере — кратко ставим на паузу.
       if (wasPlaying) {
         audio.pause();
       }
@@ -197,10 +215,110 @@ export function AudioPlayer({ audioUrl, durationSeconds, chapters }: AudioPlayer
     setCurrentTime(bounded);
   }
 
+  if (isRadio) {
+    return (
+      <div className="w-full">
+        {audioUrl ? (
+          <audio key={audioUrl} ref={audioRef} crossOrigin="anonymous" preload="none">
+            <source src={audioUrl} />
+          </audio>
+        ) : null}
+
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:items-stretch">
+          <div className="min-w-0">
+            <div className="radio-glass relative overflow-hidden rounded-2xl px-5 py-8 sm:px-10 sm:py-10">
+              <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-between">
+                <button
+                  aria-label={isPlaying ? "Pause" : "Play"}
+                  className="radio-play-btn group relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-[var(--radio-pink)] text-black transition hover:scale-[1.03] active:scale-[0.98] sm:h-32 sm:w-32"
+                  onClick={() => {
+                    void togglePlayback();
+                  }}
+                  type="button"
+                >
+                  {isPlaying ? (
+                    <span className="flex gap-2">
+                      <span className="h-10 w-2.5 rounded-sm bg-black" />
+                      <span className="h-10 w-2.5 rounded-sm bg-black" />
+                    </span>
+                  ) : (
+                    <span className="ml-1.5 h-0 w-0 border-y-[18px] border-l-[30px] border-y-transparent border-l-black" />
+                  )}
+                </button>
+
+                <div className="flex flex-1 flex-col items-center gap-5 text-center lg:items-start lg:text-left">
+                  <PlaybackAudioVisualizer
+                    audioRef={audioRef}
+                    audioUrl={audioUrl}
+                    className="w-full max-w-xs lg:max-w-sm"
+                    hasRealAudio={hasRealAudio}
+                    height={64}
+                    isPlaying={isPlaying}
+                    width={320}
+                  />
+                  <div>
+                    <p className="font-display text-[10px] font-bold uppercase tracking-[0.4em] text-white/45">
+                      Now on air
+                    </p>
+                    <p className="mt-2 max-w-xl font-display text-lg font-extrabold uppercase leading-tight tracking-wide text-white sm:text-2xl">
+                      {activeChapter?.label ?? nowPlayingTitle ?? "Reddit Voice Digest"}
+                    </p>
+                    <p className="mt-2 line-clamp-2 max-w-xl text-sm leading-relaxed text-white/55">
+                      {activeChapter?.summary ??
+                        (hasRealAudio ? "Live stream from today’s digest." : "Demo playback until MP3 is ready.")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 space-y-3">
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[var(--radio-pink)] to-[var(--radio-yellow)]"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between font-mono text-xs tabular-nums text-white/50">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(durationSeconds)}</span>
+                </div>
+                <input
+                  aria-label="Seek podcast"
+                  className="radio-seek w-full"
+                  max={durationSeconds}
+                  min={0}
+                  onChange={(event) => {
+                    seekTo(Number(event.target.value));
+                  }}
+                  step={1}
+                  type="range"
+                  value={currentTime}
+                />
+              </div>
+            </div>
+          </div>
+
+          {playlistItems.length > 0 ? (
+            <div className="radio-glass min-h-[280px] rounded-2xl p-4 sm:p-5 xl:min-h-0 xl:max-h-[420px]">
+              <BroadcastPlaylist
+                activeChapterId={activeChapter?.id}
+                chapters={chapters}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                items={playlistItems}
+                onSelect={seekTo}
+              />
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {audioUrl ? (
-        <audio key={audioUrl} ref={audioRef} preload="none">
+        <audio key={audioUrl} ref={audioRef} crossOrigin="anonymous" preload="none">
           <source src={audioUrl} />
         </audio>
       ) : null}

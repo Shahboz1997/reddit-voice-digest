@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { runDigestPipeline } from "@/lib/pipeline/run-digest-pipeline";
 
-/** Cron / Edge Function: полный дневной пайплайн (публичный дайджест, без owner). */
+/** Cron / Edge Function: full daily pipeline (public digest, no owner). */
 export const maxDuration = 300;
 
 const bodySchema = z.object({
@@ -21,11 +21,12 @@ function bearerToken(request: Request) {
   return raw.slice(7).trim() || null;
 }
 
-export async function POST(request: Request) {
-  const expected = process.env.PIPELINE_CRON_SECRET?.trim();
+async function runPublicPipelineCron(request: Request) {
+  const expected =
+    process.env.PIPELINE_CRON_SECRET?.trim() || process.env.CRON_SECRET?.trim();
   if (!expected) {
     return NextResponse.json(
-      { error: "PIPELINE_CRON_SECRET is not configured on this deployment." },
+      { error: "PIPELINE_CRON_SECRET or CRON_SECRET is not configured on this deployment." },
       { status: 503 },
     );
   }
@@ -60,4 +61,13 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+/** Vercel Cron uses GET; manual/Supabase triggers may use POST. */
+export async function GET(request: Request) {
+  return runPublicPipelineCron(request);
+}
+
+export async function POST(request: Request) {
+  return runPublicPipelineCron(request);
 }

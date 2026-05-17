@@ -22,7 +22,7 @@ export const defaultNotificationPreferences: NotificationPreference[] = [
     label: "Podcast RSS",
     isEnabled: true,
     helperText:
-      "Paste your site’s /podcast.rss (alias of /rss.xml) into Apple Podcasts, Spotify “Add by RSS”, or any podcast app.",
+      "Paste /api/podcast/feed (or /rss.xml) into Apple Podcasts, Spotify “Add by RSS”, or any podcast app.",
     targetValue: "",
   },
   {

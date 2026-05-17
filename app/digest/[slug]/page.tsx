@@ -23,7 +23,7 @@ export default async function DigestPage({ params }: DigestPageProps) {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-6 py-10 lg:px-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-8 px-4 py-8 sm:px-6 lg:px-10">
       <header className="flex flex-col gap-5 rounded-[2rem] border border-white/10 bg-white/5 p-6 md:flex-row md:items-center md:justify-between">
         <BrandMark />
         <div className="flex flex-wrap items-center gap-3">
@@ -55,11 +55,14 @@ export default async function DigestPage({ params }: DigestPageProps) {
           ))}
         </div>
 
-        <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-6">
+        <div className="mt-8 w-full">
           <AudioPlayer
             audioUrl={episode.audioUrl}
             chapters={episode.chapters}
             durationSeconds={episode.durationSeconds}
+            nowPlayingTitle={episode.title}
+            playlistItems={episode.items}
+            variant="radio"
           />
         </div>
       </section>
@@ -111,7 +114,7 @@ export default async function DigestPage({ params }: DigestPageProps) {
         ))}
       </section>
 
-      <KeyThoughtsPanel episode={episode} />
+      <KeyThoughtsPanel episode={episode} variant="radio" />
     </main>
   );
 }

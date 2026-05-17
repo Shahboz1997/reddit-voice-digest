@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { PERSONAS, SUMMARY_DEPTHS } from "@/lib/digest-persona";
+import {
+  defaultElevenLabsVoiceIdForPersona,
+  ELEVENLABS_VOICE_CATALOG,
+  isKnownElevenLabsVoiceId,
+  PERSONAS,
+  SUMMARY_DEPTHS,
+} from "@/lib/digest-persona";
+import { SubredditStationGrid } from "@/components/subreddit-station-grid";
+import { COMMON_TIMEZONES } from "@/lib/delivery/timezone-options";
+import { getSubredditStation } from "@/lib/subreddit-stations";
 import type {
   NotificationPreference,
   PersonaId,
@@ -26,6 +35,8 @@ interface LocalPreferences {
   summaryDepth: SummaryDepthId;
   deliveryLocalTime: string | null;
   deliveryWeekdaysOnly: boolean;
+  timezone: string;
+  elevenlabsVoiceId: string | null;
 }
 
 function depthIndex(id: SummaryDepthId) {
@@ -42,15 +53,21 @@ export function SettingsForm({
   const [subreddits, setSubreddits] = useState<string[]>(defaultSubreddits);
   const [notifications, setNotifications] = useState<NotificationPreference[]>(defaultNotifications);
   const [persona, setPersona] = useState<PersonaId>("news_anchor");
+  const [elevenlabsVoiceId, setElevenlabsVoiceId] = useState<string | null>(null);
+  const [customVoiceDraft, setCustomVoiceDraft] = useState("");
+  const [showCustomVoice, setShowCustomVoice] = useState(false);
   const [summaryDepth, setSummaryDepth] = useState<SummaryDepthId>("standard");
   const [deliveryLocalTime, setDeliveryLocalTime] = useState("");
   const [deliveryWeekdaysOnly, setDeliveryWeekdaysOnly] = useState(false);
+  const [timezone, setTimezone] = useState("UTC");
   const [displayRssUrl, setDisplayRssUrl] = useState(rssUrl);
   const [userApiRssUrl, setUserApiRssUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState("Изменения сохраняются локально и в Supabase после входа.");
+  const [status, setStatus] = useState("Changes are saved locally and to Supabase after you sign in.");
   const [isSaving, setIsSaving] = useState(false);
   const [onDemandBusy, setOnDemandBusy] = useState(false);
   const [onDemandMessage, setOnDemandMessage] = useState<string | null>(null);
+  const [deliveryStatusLine, setDeliveryStatusLine] = useState<string | null>(null);
+  const [lastDeliveryDigestSlug, setLastDeliveryDigestSlug] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   const persistLocalSnapshot = useCallback(() => {
@@ -61,9 +78,39 @@ export function SettingsForm({
       summaryDepth,
       deliveryLocalTime: deliveryLocalTime || null,
       deliveryWeekdaysOnly,
+      timezone,
+      elevenlabsVoiceId,
     };
     window.localStorage.setItem(preferencesStorageKey, JSON.stringify(snapshot));
-  }, [deliveryLocalTime, deliveryWeekdaysOnly, notifications, persona, subreddits, summaryDepth]);
+  }, [
+    deliveryLocalTime,
+    deliveryWeekdaysOnly,
+    timezone,
+    elevenlabsVoiceId,
+    notifications,
+    persona,
+    subreddits,
+    summaryDepth,
+  ]);
+
+  const loadDeliveryStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/delivery/status", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        headline?: string;
+        lastRun?: { digestSlug?: string | null };
+      };
+
+      setDeliveryStatusLine(payload.headline ?? null);
+      setLastDeliveryDigestSlug(payload.lastRun?.digestSlug ?? null);
+    } catch {
+      // Ignore when signed out or delivery tables are not migrated yet.
+    }
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -96,6 +143,14 @@ export function SettingsForm({
             setPersona(payload.persona);
           }
 
+          if (payload.elevenlabsVoiceId !== undefined) {
+            setElevenlabsVoiceId(payload.elevenlabsVoiceId);
+            if (payload.elevenlabsVoiceId && !isKnownElevenLabsVoiceId(payload.elevenlabsVoiceId)) {
+              setCustomVoiceDraft(payload.elevenlabsVoiceId);
+              setShowCustomVoice(true);
+            }
+          }
+
           if (payload.summaryDepth) {
             setSummaryDepth(payload.summaryDepth);
           }
@@ -105,14 +160,18 @@ export function SettingsForm({
           }
 
           setDeliveryWeekdaysOnly(Boolean(payload.deliveryWeekdaysOnly));
+          if (typeof payload.timezone === "string" && payload.timezone) {
+            setTimezone(payload.timezone);
+          }
 
           if (typeof payload.userApiRssUrl === "string") {
             setUserApiRssUrl(payload.userApiRssUrl);
           }
 
           if (payload.source === "remote") {
-            setStatus("Настройки загружены из Supabase.");
+            setStatus("Settings loaded from Supabase.");
             setDisplayRssUrl(payload.personalRssUrl?.trim() || rssUrl);
+            void loadDeliveryStatus();
           } else if (payload.personalRssUrl) {
             setDisplayRssUrl(payload.personalRssUrl);
           }
@@ -128,9 +187,19 @@ export function SettingsForm({
             if (parsed.subreddits?.length) setSubreddits(parsed.subreddits);
             if (parsed.notifications?.length) setNotifications(parsed.notifications);
             if (parsed.persona) setPersona(parsed.persona);
+            if (parsed.elevenlabsVoiceId !== undefined) {
+              setElevenlabsVoiceId(parsed.elevenlabsVoiceId);
+              if (parsed.elevenlabsVoiceId && !isKnownElevenLabsVoiceId(parsed.elevenlabsVoiceId)) {
+                setCustomVoiceDraft(parsed.elevenlabsVoiceId);
+                setShowCustomVoice(true);
+              }
+            }
             if (parsed.summaryDepth) setSummaryDepth(parsed.summaryDepth);
             if (parsed.deliveryLocalTime !== undefined) setDeliveryLocalTime(parsed.deliveryLocalTime ?? "");
             setDeliveryWeekdaysOnly(Boolean(parsed.deliveryWeekdaysOnly));
+            if (typeof parsed.timezone === "string" && parsed.timezone) {
+              setTimezone(parsed.timezone);
+            }
           }
         } catch {
           // ignore malformed local storage and use defaults
@@ -142,7 +211,7 @@ export function SettingsForm({
     return () => {
       ignore = true;
     };
-  }, [rssUrl]);
+  }, [loadDeliveryStatus, rssUrl]);
 
   const hasTelegramEnabled = useMemo(() => {
     return notifications.some((item) => item.channelType === "telegram" && item.isEnabled);
@@ -152,12 +221,26 @@ export function SettingsForm({
     return [...availableSources].sort((a, b) => a.subreddit_name.localeCompare(b.subreddit_name));
   }, [availableSources]);
 
+  const personaDefaultVoiceId = useMemo(
+    () => defaultElevenLabsVoiceIdForPersona(persona),
+    [persona],
+  );
+
+  const customVoiceActive =
+    Boolean(elevenlabsVoiceId) && !isKnownElevenLabsVoiceId(elevenlabsVoiceId ?? "");
+
   function addSubreddit(name: string) {
     setSubreddits((current) => (current.includes(name) ? current : [...current, name]));
   }
 
   function removeSubreddit(name: string) {
     setSubreddits((current) => current.filter((entry) => entry !== name));
+  }
+
+  function toggleSubreddit(name: string) {
+    setSubreddits((current) =>
+      current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name],
+    );
   }
 
   function moveSubreddit(fromIndex: number, toIndex: number) {
@@ -211,26 +294,36 @@ export function SettingsForm({
         const text =
           data.error ??
           (response.status === 401
-            ? "Войдите в аккаунт, затем попробуйте снова."
+            ? "Sign in to your account, then try again."
             : response.status === 503
-              ? "Сервер без service role или пайплайн недоступен."
-              : "Не удалось запустить генерацию.");
+              ? "Server missing service role or pipeline unavailable."
+              : "Could not start generation.");
         setOnDemandMessage(text);
         return;
       }
 
       if (data.ok && data.result?.title) {
+        void loadDeliveryStatus();
         setOnDemandMessage(
-          `Готово: «${data.result.title}». Выпуск появится в персональном RSS и архиве (slug: ${data.result.slug}).`,
+          `Done: “${data.result.title}”. The episode will appear in your personal RSS and archive (slug: ${data.result.slug}).`,
         );
       } else {
-        setOnDemandMessage("Генерация завершилась успешно.");
+        setOnDemandMessage("Generation completed successfully.");
       }
     } catch {
-      setOnDemandMessage("Сеть недоступна или запрос отменён.");
+      setOnDemandMessage("Network unavailable or request was cancelled.");
     } finally {
       setOnDemandBusy(false);
     }
+  }
+
+  function resolveElevenlabsVoiceForSave(): string | null {
+    if (showCustomVoice || customVoiceActive) {
+      const trimmed = customVoiceDraft.trim();
+      return trimmed.length >= 16 ? trimmed : elevenlabsVoiceId;
+    }
+
+    return elevenlabsVoiceId;
   }
 
   async function handleSave() {
@@ -243,9 +336,25 @@ export function SettingsForm({
       summaryDepth,
       deliveryLocalTime: deliveryLocalTime || null,
       deliveryWeekdaysOnly,
+      timezone,
+      elevenlabsVoiceId: resolveElevenlabsVoiceForSave(),
     };
 
-    persistLocalSnapshot();
+    const savedVoiceId = payload.elevenlabsVoiceId;
+    setElevenlabsVoiceId(savedVoiceId);
+    window.localStorage.setItem(
+      preferencesStorageKey,
+      JSON.stringify({
+        subreddits,
+        notifications,
+        persona,
+        summaryDepth,
+        deliveryLocalTime: deliveryLocalTime || null,
+        deliveryWeekdaysOnly,
+        timezone,
+        elevenlabsVoiceId: savedVoiceId,
+      }),
+    );
 
     try {
       const response = await fetch("/api/preferences", {
@@ -265,16 +374,17 @@ export function SettingsForm({
         if (typeof data.userApiRssUrl === "string" && data.userApiRssUrl) {
           setUserApiRssUrl(data.userApiRssUrl);
         }
-        setStatus("Сохранено в Supabase и локально.");
+        setStatus("Saved to Supabase and locally.");
+        void loadDeliveryStatus();
       } else if (response.status === 401) {
         setStatus(
-          "Сохранено локально. После входа через Supabase синхронизация отправит профиль на сервер и выдаст персональный RSS.",
+          "Saved locally. After signing in with Supabase, sync will push your profile to the server and issue a personal RSS feed.",
         );
       } else {
-        setStatus("Сохранено локально. Удалённые настройки ответили ошибкой.");
+        setStatus("Saved locally. Remote settings returned an error.");
       }
     } catch {
-      setStatus("Сохранено локально. Проверьте сеть и повторите попытку.");
+      setStatus("Saved locally. Check your network and try again.");
     } finally {
       setIsSaving(false);
     }
@@ -282,100 +392,86 @@ export function SettingsForm({
 
   return (
     <div className="grid gap-8 xl:grid-cols-[1.3fr_0.9fr]">
-      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-        <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Personalization</p>
-        <h1 className="mt-3 text-3xl font-semibold text-white">Подбор сообществ и приоритет</h1>
+      <section className="radio-glass rounded-2xl p-6">
+        <p className="font-display text-sm font-bold uppercase tracking-[0.28em] text-[var(--radio-pink)]">
+          Personalization
+        </p>
+        <h1 className="mt-3 font-display text-3xl font-bold uppercase tracking-tight text-white">
+          Communities & priority
+        </h1>
         <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-          Нажмите карточку сабреддита, чтобы отметить её как выбранную (Selected). Выбранные можно перетаскивать ниже — чем
-          выше в списке, тем выше приоритет в подкасте. Ниже — «голос», глубина саммари и остальные настройки.
+          Tap a subreddit tile to select it. Drag selected items below to set podcast priority — higher in the list means higher priority. Voice, summary depth, and more are below.
         </p>
 
         <div className="mt-6 border-b border-white/10 pb-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Каталог</p>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {catalogSorted.map((source) => {
-              const selected = subreddits.includes(source.subreddit_name);
-
-              return (
-                <button
-                  key={source.subreddit_name}
-                  aria-pressed={selected}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    selected
-                      ? "border-cyan-400/55 bg-gradient-to-br from-cyan-500/15 to-slate-900/70 ring-1 ring-cyan-400/30"
-                      : "border-white/10 bg-slate-950/50 hover:border-white/25 hover:bg-slate-900/70"
-                  }`}
-                  onClick={() => (selected ? removeSubreddit(source.subreddit_name) : addSubreddit(source.subreddit_name))}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-white">r/{source.subreddit_name}</p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        Базовый приоритет: {source.priority ?? "—"}
-                      </p>
-                    </div>
-                    {selected ? (
-                      <span className="shrink-0 rounded-full bg-cyan-400/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-950">
-                        Selected
-                      </span>
-                    ) : (
-                      <span className="shrink-0 text-[10px] uppercase tracking-wider text-slate-500">
-                        Tap
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+          <p className="font-display text-xs font-bold uppercase tracking-[0.28em] text-white/50">Stations</p>
+          <p className="mt-1 text-sm text-white/55">
+            Radio Record–style tiles — tap to add or remove a subreddit.
+          </p>
+          <div className="mt-4">
+            <SubredditStationGrid
+              onToggle={toggleSubreddit}
+              selected={subreddits}
+              sources={catalogSorted}
+            />
           </div>
         </div>
 
         <div className="mt-5 space-y-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Приоритет (drag & drop)</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Priority (drag & drop)</p>
           {subreddits.length === 0 ? (
-            <p className="text-sm text-slate-400">Добавьте хотя бы один сабреддит сверху.</p>
+            <p className="text-sm text-slate-400">Add at least one subreddit above.</p>
           ) : (
-            subreddits.map((name, index) => (
-              <div
-                key={name}
-                className="flex cursor-grab items-center justify-between rounded-3xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 active:cursor-grabbing"
-                draggable
-                onDragEnd={() => setDragIndex(null)}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                }}
-                onDragStart={() => setDragIndex(index)}
-                onDrop={() => {
-                  if (dragIndex === null || dragIndex === index) return;
-                  moveSubreddit(dragIndex, index);
-                  setDragIndex(null);
-                }}
-              >
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-cyan-200/80">
-                    Приоритет {index + 1}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white">r/{name}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Базовые очки источника:{" "}
-                    {availableSources.find((s) => s.subreddit_name === name)?.priority ?? "—"}
-                  </p>
-                </div>
-                <button
-                  className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200 hover:border-white/30 hover:text-white"
-                  onClick={() => removeSubreddit(name)}
-                  type="button"
+            subreddits.map((name, index) => {
+              const { Icon, label } = getSubredditStation(name);
+
+              return (
+                <div
+                  key={name}
+                  className="flex cursor-grab items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#181818] px-4 py-3 active:cursor-grabbing"
+                  draggable
+                  onDragEnd={() => setDragIndex(null)}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDragStart={() => setDragIndex(index)}
+                  onDrop={() => {
+                    if (dragIndex === null || dragIndex === index) return;
+                    moveSubreddit(dragIndex, index);
+                    setDragIndex(null);
+                  }}
                 >
-                  Убрать
-                </button>
-              </div>
-            ))
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0d0d0d]">
+                      <Icon className="h-5 w-5 text-white/80" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]">
+                        #{index + 1}
+                      </p>
+                      <p className="mt-0.5 truncate font-display text-sm font-bold uppercase text-white">
+                        {label}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-white/45">
+                        r/{name} · score {availableSources.find((s) => s.subreddit_name === name)?.priority ?? "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs text-white/70 hover:border-[var(--radio-pink)]/40 hover:text-white"
+                    onClick={() => removeSubreddit(name)}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
 
         <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5">
-          <p className="text-sm uppercase tracking-[0.22em] text-cyan-300">Голос и вайб</p>
+          <p className="text-sm uppercase tracking-[0.22em] text-cyan-300">Voice & vibe</p>
           <div className="mt-4 space-y-3">
             {PERSONAS.map((row) => (
               <label
@@ -396,7 +492,7 @@ export function SettingsForm({
                     <span className="text-sm font-medium text-white">{row.label}</span>
                     <span className="mt-1 block text-xs leading-5 text-slate-400">{row.hint}</span>
                     <span className="mt-1 block text-[11px] text-slate-500">
-                      Меняет инструкции OpenAI для саммари/скрипта и голос OpenAI TTS (Assembly заготовлен в провайдере).
+                      Changes OpenAI instructions for summary/script and TTS voice (ElevenLabs or OpenAI — see AUDIO_PROVIDER).
                     </span>
                   </span>
                 </span>
@@ -404,7 +500,111 @@ export function SettingsForm({
             ))}
           </div>
 
-          <p className="mt-8 text-xs uppercase tracking-[0.22em] text-slate-400">Глубина саммари</p>
+          <div className="mt-8 border-t border-white/10 pt-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">ElevenLabs voice</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              When AUDIO_PROVIDER=elevenlabs, controls narration. Auto picks a voice for your persona (currently:{" "}
+              {ELEVENLABS_VOICE_CATALOG.find((v) => v.id === personaDefaultVoiceId)?.name ?? "—"}).
+            </p>
+
+            <div className="mt-4 space-y-2">
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                  !elevenlabsVoiceId && !customVoiceActive
+                    ? "border-cyan-400/50 bg-white/10"
+                    : "border-white/10 hover:border-white/20"
+                }`}
+              >
+                <input
+                  checked={!elevenlabsVoiceId && !customVoiceActive}
+                  className="mt-1"
+                  name="elevenlabsVoice"
+                  onChange={() => {
+                    setElevenlabsVoiceId(null);
+                    setShowCustomVoice(false);
+                    setCustomVoiceDraft("");
+                  }}
+                  type="radio"
+                />
+                <span>
+                  <span className="text-sm font-medium text-white">Auto (by persona)</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Recommended — updates with the voice & vibe selection above.
+                  </span>
+                </span>
+              </label>
+
+              {ELEVENLABS_VOICE_CATALOG.map((voice) => {
+                const selected = elevenlabsVoiceId === voice.id;
+                const recommended = voice.recommendedPersonas.includes(persona);
+
+                return (
+                  <label
+                    key={voice.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                      selected ? "border-cyan-400/50 bg-white/10" : "border-white/10 hover:border-white/20"
+                    }`}
+                  >
+                    <input
+                      checked={selected}
+                      className="mt-1"
+                      name="elevenlabsVoice"
+                      onChange={() => {
+                        setElevenlabsVoiceId(voice.id);
+                        setShowCustomVoice(false);
+                        setCustomVoiceDraft("");
+                      }}
+                      type="radio"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-white">{voice.name}</span>
+                        {recommended ? (
+                          <span className="rounded-full bg-cyan-400/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-cyan-200">
+                            for persona
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-400">{voice.hint}</span>
+                    </span>
+                  </label>
+                );
+              })}
+
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                  customVoiceActive || showCustomVoice
+                    ? "border-cyan-400/50 bg-white/10"
+                    : "border-white/10 hover:border-white/20"
+                }`}
+              >
+                <input
+                  checked={customVoiceActive || showCustomVoice}
+                  className="mt-1"
+                  name="elevenlabsVoice"
+                  onChange={() => setShowCustomVoice(true)}
+                  type="radio"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-white">Custom voice ID</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    From ElevenLabs → Voices → copy a clone or premade voice ID.
+                  </span>
+                  {showCustomVoice || customVoiceActive ? (
+                    <input
+                      className="mt-3 w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 font-mono text-xs text-white placeholder:text-slate-600"
+                      onChange={(event) => setCustomVoiceDraft(event.target.value)}
+                      placeholder="e.g. pNInz6obpgDQGcFmaJgB"
+                      spellCheck={false}
+                      value={customVoiceDraft}
+                    />
+                  ) : null}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <p className="mt-8 text-xs uppercase tracking-[0.22em] text-slate-400">Summary depth</p>
           <div className="mt-4">
             <input
               className="w-full accent-cyan-400"
@@ -433,16 +633,15 @@ export function SettingsForm({
       <div className="space-y-6">
         <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
           <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Delivery</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white">Уведомления и фиды</h2>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Notifications & feeds</h2>
 
           <div className="mt-6 rounded-3xl border border-white/15 bg-slate-950/50 p-4">
-            <p className="text-sm font-medium text-white">Рассылка во времени</p>
+            <p className="text-sm font-medium text-white">Scheduled delivery</p>
             <p className="mt-2 text-sm text-slate-400">
-              Когда включите канал ниже и подключите воркер/cron к этим полям, дайджест можно прислать каждый день в нужный
-              момент.
+              When you enable a channel below and connect a worker/cron to these fields, the digest can be delivered daily at your chosen time.
             </p>
             <label className="mt-4 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="delivery-time">
-              Локальное время
+              Local time
             </label>
             <input
               className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
@@ -451,6 +650,37 @@ export function SettingsForm({
               type="time"
               value={deliveryLocalTime}
             />
+            <label className="mt-4 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="delivery-timezone">
+              Timezone
+            </label>
+            <select
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+              id="delivery-timezone"
+              onChange={(event) => setTimezone(event.target.value)}
+              value={timezone}
+            >
+              {COMMON_TIMEZONES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} ({option.value})
+                </option>
+              ))}
+            </select>
+            {deliveryStatusLine ? (
+              <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm leading-6 text-slate-200">
+                <p>{deliveryStatusLine}</p>
+                {lastDeliveryDigestSlug ? (
+                  <a
+                    className="mt-2 inline-block text-cyan-300 underline-offset-2 hover:underline"
+                    href={`/digest/${lastDeliveryDigestSlug}`}
+                  >
+                    Open last episode
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+            <p className="mt-2 text-xs text-slate-500">
+              On Vercel, cron runs every 10 minutes via vercel.json. Set CRON_SECRET (same as PIPELINE_CRON_SECRET).
+            </p>
             <label className="mt-4 flex items-center gap-3 text-sm text-slate-200">
               <input
                 checked={deliveryWeekdaysOnly}
@@ -458,7 +688,7 @@ export function SettingsForm({
                 onChange={(event) => setDeliveryWeekdaysOnly(event.target.checked)}
                 type="checkbox"
               />
-              Только по будням (без напоминаний в выходные)
+              Weekdays only (no weekend reminders)
             </label>
           </div>
 
@@ -492,16 +722,15 @@ export function SettingsForm({
                   />
                 ) : (
                   <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Подкаст-RSS</p>
-                    <p className="mt-2 text-xs text-slate-500">Приватная ссылка (токен, предпочтительно для плеера)</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Podcast RSS</p>
+                    <p className="mt-2 text-xs text-slate-500">Private link (token — preferred for players)</p>
                     <p className="mt-1 break-all text-cyan-100">{displayRssUrl}</p>
-                    <p className="mt-3 text-xs text-slate-500">Фид по ID аккаунта (динамический API)</p>
+                    <p className="mt-3 text-xs text-slate-500">Feed by account ID (dynamic API)</p>
                     <p className="mt-1 break-all font-mono text-[13px] text-cyan-200/90">
-                      {userApiRssUrl ?? "Появится после входа и загрузки настроек с сервера."}
+                      {userApiRssUrl ?? "Available after sign-in and loading settings from the server."}
                     </p>
                     <p className="mt-3 text-xs text-slate-500">
-                      Общая ссылка для гостей: <span className="break-all text-slate-400">{rssUrl}</span>. Персональные адреса
-                      ниже включаются после входа и нажатия Save preferences.
+                      Public guest link: <span className="break-all text-slate-400">{rssUrl}</span>. Personal URLs below are enabled after sign-in and clicking Save preferences.
                     </p>
                   </div>
                 )}
@@ -533,22 +762,22 @@ export function SettingsForm({
               }}
               title={
                 subreddits.length === 0
-                  ? "Сначала выберите сабреддиты"
-                  : "Соберёт свежий дайджест сейчас (может занять несколько минут)"
+                  ? "Select subreddits first"
+                  : "Builds a fresh digest now (may take several minutes)"
               }
               type="button"
             >
-              {onDemandBusy ? "Генерация…" : "Сгенерировать вне очереди"}
+              {onDemandBusy ? "Generating…" : "Generate on demand"}
             </button>
             {hasTelegramEnabled ? (
               <p className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100">
-                Telegram включён — отправка сработает, когда добавите токен бота на сервере и cron-триггер.
+                Telegram enabled — set TELEGRAM_BOT_TOKEN on the server and your chat id above; cron calls /api/delivery/process-due.
               </p>
             ) : null}
           </div>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            «Вне очереди» использует сохранённые в Supabase сабреддиты, голос и глубину (если ещё не сохраняли — нажмите Save).
-            На хостингах с коротким таймаутом запрос может оборваться: тогда см. серверные логи или запуск пайплайна из CLI.
+            On-demand uses subreddits, voice, and depth saved in Supabase (click Save if you have not yet).
+            On hosts with short timeouts the request may fail — check server logs or run the pipeline from the CLI.
           </p>
           {onDemandMessage ? (
             <p className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">

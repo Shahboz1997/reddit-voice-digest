@@ -7,6 +7,14 @@ import {
   personaThreadPromptAddition,
 } from "@/lib/digest-persona";
 
+export const REDDIT_NOISE_FILTER_RULES = `
+Noise filter (apply before summarizing):
+- Ignore comments shorter than 5 words (e.g. "this", "lol", "+1", emoji-only).
+- Ignore branches that are mostly insults, empty sarcasm, pile-ons, or obvious bot/spam patterns.
+- Prioritize only: practical advice, specific numbers or metrics, first-hand experience ("I tried…", "we shipped…"), and links to tools or resources.
+- Drop flamewars even if highly upvoted; witty lines count only if they carry a concrete takeaway.
+`.trim();
+
 export function buildThreadSummaryPrompt(input: {
   subreddit: string;
   title: string;
@@ -27,8 +35,8 @@ Return JSON with:
 - key_takeaways (array of 3 strings)
 
 Rules:
-- Remove vulgarity and obvious flamewar noise; keep witty lines only if substantive.
-- Prefer practical advice, concrete trade-offs, and repeated consensus.
+${REDDIT_NOISE_FILTER_RULES}
+- Prefer repeated consensus and concrete trade-offs over hot takes.
 - Apply the narrator voice described below.${depth === "deep" ? "\n- You may cite one standout comment line indirectly (no usernames)." : ""}
 
 ${personaThreadPromptAddition(persona)}
@@ -91,6 +99,7 @@ Requirements:
 - Structure each segment as: hook, distilled insight, lightweight trade-offs.
 - Use audible transitions between threads.
 - Reflect the pacing implied by PRIMARY vs supporting segments above (more detail on PRIMARY).
+- Keep signal over drama: practical steps, numbers, lived experience, and tool mentions beat jokes or meta-arguments.
 - Avoid filler and avoid referencing upvotes directly.
 
 Date: ${input.dateLabel}

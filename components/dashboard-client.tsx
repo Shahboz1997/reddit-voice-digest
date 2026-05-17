@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { ArchiveSidebar } from "@/components/archive-sidebar";
 import { AuthHeader } from "@/components/auth-header";
 import { AudioPlayer } from "@/components/audio-player";
 import { BrandMark } from "@/components/brand-mark";
 import { KeyThoughtsPanel } from "@/components/key-thoughts-panel";
+import { LiveOnAirBadge } from "@/components/live-on-air-badge";
 import { defaultSubredditPreferences } from "@/lib/catalog";
 import { formatDigestDate } from "@/lib/date";
 import type { DigestEpisode } from "@/lib/types";
@@ -80,79 +81,81 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
     );
   }, [latestEpisode.topics, selectedSubreddits]);
 
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const headlineDate = formatDigestDate(latestEpisode.publishedAt, {
+    day: "numeric",
+    month: "long",
+  });
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-5 rounded-[2rem] border border-white/10 bg-white/5 px-6 py-5 backdrop-blur md:flex-row md:items-center md:justify-between">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-10 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <LiveOnAirBadge active={isPlaying} />
+
+      <header className="radio-glass flex flex-col gap-5 rounded-2xl p-5 md:flex-row md:items-center md:justify-between" id="about">
         <BrandMark />
 
         <div className="flex flex-wrap items-center gap-3">
           <AuthHeader />
           <Link
-            className="inline-flex rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
+            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-white transition hover:border-[var(--radio-pink)]/50 hover:text-[var(--radio-pink)]"
             href="/settings"
           >
-            Configure my subreddits
+            My lineup
           </Link>
         </div>
       </header>
 
-      <section className="grid gap-8 xl:grid-cols-[1.75fr_0.95fr]">
-        <div className="space-y-8">
-          <section className="rounded-[2.25rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 sm:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-sm uppercase tracking-[0.28em] text-cyan-300">
-                  Main podcast of the day
-                </p>
-                <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                  Main Reddit stories for{" "}
-                  {formatDigestDate(latestEpisode.publishedAt, {
-                    day: "numeric",
-                    month: "long",
-                  })}
-                </h1>
-                <p className="mt-4 text-base leading-7 text-slate-300">{latestEpisode.summary}</p>
-              </div>
+      <section className="w-full space-y-6" id="player">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-4xl">
+            <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
+              On air now
+            </p>
+            <h1 className="mt-3 font-display text-3xl font-black uppercase leading-[1.05] tracking-wide text-white sm:text-4xl lg:text-5xl">
+              Main Reddit stories
+              <span className="mt-1 block text-white/55">for {headlineDate}</span>
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 sm:text-base">{latestEpisode.summary}</p>
+          </div>
 
-              <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4">
-                <p className="text-sm font-medium text-cyan-50">My subreddits</p>
-                <div className="mt-3 flex max-w-xs flex-wrap gap-2">
-                  {selectedSubreddits.map((subreddit) => (
-                    <span
-                      key={subreddit}
-                      className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-xs text-cyan-100"
-                    >
-                      r/{subreddit}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 rounded-[2rem] border border-white/10 bg-slate-950/60 p-6">
-              <AudioPlayer
-                audioUrl={latestEpisode.audioUrl}
-                chapters={latestEpisode.chapters}
-                durationSeconds={latestEpisode.durationSeconds}
-              />
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-2">
-              {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
-                <span
-                  key={topic}
-                  className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-cyan-100"
-                >
-                  #{topic}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <KeyThoughtsPanel episode={latestEpisode} />
+          <div className="flex max-w-md flex-wrap gap-2">
+            {selectedSubreddits.map((subreddit) => (
+              <span
+                key={subreddit}
+                className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-white/70"
+              >
+                r/{subreddit}
+              </span>
+            ))}
+          </div>
         </div>
 
-        <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} />
+        <AudioPlayer
+          audioUrl={latestEpisode.audioUrl}
+          chapters={latestEpisode.chapters}
+          durationSeconds={latestEpisode.durationSeconds}
+          nowPlayingTitle={latestEpisode.title}
+          onPlaybackChange={setIsPlaying}
+          playlistItems={latestEpisode.items}
+          variant="radio"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
+            <span
+              key={topic}
+              className="rounded-md border border-[var(--radio-pink)]/25 bg-[var(--radio-pink)]/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]"
+            >
+              #{topic}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-8 xl:grid-cols-[1fr_340px]" id="archive">
+        <KeyThoughtsPanel episode={latestEpisode} variant="radio" />
+        <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} variant="radio" />
       </section>
     </main>
   );
