@@ -99,6 +99,10 @@ export interface SubredditStationMeta {
 
 const STATION_BY_NAME: Record<string, SubredditStationMeta> = {
   productivity: { label: "Productivity", Icon: IconProductivity },
+  lifeprotips: { label: "Life Pro Tips", Icon: IconProductivity },
+  getdisciplined: { label: "Get Disciplined", Icon: IconProductivity },
+  notion: { label: "Notion", Icon: IconTechnology },
+  todoist: { label: "Todoist", Icon: IconProductivity },
   personalfinance: { label: "Personal Finance", Icon: IconFinance },
   entrepreneur: { label: "Entrepreneur", Icon: IconEntrepreneur },
   investing: { label: "Investing", Icon: IconInvesting },

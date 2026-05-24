@@ -125,7 +125,13 @@ export async function GET() {
   const profileError = profileRes.error;
 
   if (prefsError || subredditError || notificationError || profileError) {
-    return NextResponse.json(buildDefaultResponse());
+    const message =
+      prefsError?.message ??
+      subredditError?.message ??
+      notificationError?.message ??
+      profileError?.message ??
+      "Failed to load preferences.";
+    return NextResponse.json({ error: message }, { status: 503 });
   }
 
   const profile = profileRes.data;

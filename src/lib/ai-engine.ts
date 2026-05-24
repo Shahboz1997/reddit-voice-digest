@@ -1,11 +1,11 @@
 import OpenAI from "openai";
 
-import { getServerEnv } from "@/lib/config";
+import { getServerEnv, resolveOpenAiScriptModel } from "@/lib/config";
 import {
   depthScriptWordRange,
   personaScriptPromptAddition,
 } from "@/lib/digest-persona";
-import { REDDIT_NOISE_FILTER_RULES } from "@/lib/prompts/digest";
+import { REDDIT_NATIVE_SCRIPT_SECTIONS, REDDIT_NOISE_FILTER_RULES } from "@/lib/prompts/digest";
 import type { PersonaId, SummaryDepthId } from "@/lib/types";
 
 export type DialogueSpeaker = "host_a" | "host_b";
@@ -101,6 +101,7 @@ ${personaScriptPromptAddition(persona)}
 
 Rules:
 ${REDDIT_NOISE_FILTER_RULES}
+${REDDIT_NATIVE_SCRIPT_SECTIONS}
 - Alternate speakers often; react to each other ("Right", "Wait —", "So you're saying…").
 - Use short spoken lines (1–3 sentences per turn). No stage directions, no markdown.
 - Weave all thread summaries; spend more time on PRIMARY segments.
@@ -153,7 +154,7 @@ export async function redditSummariesToDialogue(input: {
   const { client, env } = getOpenAiClient();
 
   const response = await client.responses.create({
-    model: env.OPENAI_MODEL,
+    model: resolveOpenAiScriptModel(env),
     input: [
       {
         role: "user",

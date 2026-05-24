@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AuthHeader } from "@/components/auth-header";
 import { BrandMark } from "@/components/brand-mark";
+import { PodcastSetupGuide } from "@/components/podcast-setup-guide";
 import { SettingsForm } from "@/components/settings-form";
 import {
   availableSubreddits,
@@ -33,6 +34,8 @@ export default function SettingsPage() {
         defaultSubreddits={defaultSubredditPreferences}
         rssUrl={`${publicEnv.NEXT_PUBLIC_APP_URL}/api/podcast/feed`}
       />
+
+      <PodcastSetupGuide rssUrl={`${publicEnv.NEXT_PUBLIC_APP_URL}/api/podcast/feed`} />
     </main>
   );
 }

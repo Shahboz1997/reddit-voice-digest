@@ -7,6 +7,15 @@ import {
   personaThreadPromptAddition,
 } from "@/lib/digest-persona";
 
+export const REDDIT_NATIVE_SCRIPT_SECTIONS = `
+Structure every segment using these Reddit-native beats (in order):
+1. OP context — what the original poster asked or shared.
+2. Top consensus — where the community largely agrees.
+3. Hot takes / disagreements — one meaningful counterpoint or debate, if present.
+4. Actionable tips — concrete steps, tools, or numbers listeners can use today.
+5. Full thread cue — end with a short line like "Full discussion on r/{subreddit}".
+`.trim();
+
 export const REDDIT_NOISE_FILTER_RULES = `
 Noise filter (apply before summarizing):
 - Ignore comments shorter than 5 words (e.g. "this", "lol", "+1", emoji-only).
@@ -96,6 +105,7 @@ ${personaScriptPromptAddition(persona)}
 
 Requirements:
 - Target ${minWords}–${maxWords} words total in full_script (across intro, body segments, closing).
+${REDDIT_NATIVE_SCRIPT_SECTIONS}
 - Structure each segment as: hook, distilled insight, lightweight trade-offs.
 - Use audible transitions between threads.
 - Reflect the pacing implied by PRIMARY vs supporting segments above (more detail on PRIMARY).

@@ -66,6 +66,9 @@ export function SettingsForm({
   const [isSaving, setIsSaving] = useState(false);
   const [onDemandBusy, setOnDemandBusy] = useState(false);
   const [onDemandMessage, setOnDemandMessage] = useState<string | null>(null);
+  const [redditPostReference, setRedditPostReference] = useState("");
+  const [episodeMode, setEpisodeMode] = useState<"multi" | "single_thread">("multi");
+  const [queueInBackground, setQueueInBackground] = useState(false);
   const [deliveryStatusLine, setDeliveryStatusLine] = useState<string | null>(null);
   const [lastDeliveryDigestSlug, setLastDeliveryDigestSlug] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -281,12 +284,20 @@ export function SettingsForm({
         method: "POST",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          redditPostReference: redditPostReference.trim() || undefined,
+          episodeMode: redditPostReference.trim() ? "single_thread" : episodeMode,
+          async: queueInBackground,
+        }),
       });
 
       const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        queued?: boolean;
+        jobId?: string;
         result?: { title?: string; slug?: string };
       };
 
@@ -299,6 +310,13 @@ export function SettingsForm({
               ? "Server missing service role or pipeline unavailable."
               : "Could not start generation.");
         setOnDemandMessage(text);
+        return;
+      }
+
+      if (data.queued && data.jobId) {
+        setOnDemandMessage(
+          `Queued in background (job ${data.jobId.slice(0, 8)}…). The worker will publish the episode to your RSS when ready.`,
+        );
         return;
       }
 
@@ -740,6 +758,46 @@ export function SettingsForm({
         </section>
 
         <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+          <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Generation</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">On-demand digest</h2>
+
+          <label className="mt-6 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="reddit-thread-url">
+            Optional Reddit thread URL or post id
+          </label>
+          <input
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
+            id="reddit-thread-url"
+            onChange={(event) => setRedditPostReference(event.target.value)}
+            placeholder="https://www.reddit.com/r/productivity/comments/..."
+            value={redditPostReference}
+          />
+
+          <label className="mt-5 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="episode-mode">
+            Episode mode
+          </label>
+          <select
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
+            disabled={Boolean(redditPostReference.trim())}
+            id="episode-mode"
+            onChange={(event) => setEpisodeMode(event.target.value as "multi" | "single_thread")}
+            value={redditPostReference.trim() ? "single_thread" : episodeMode}
+          >
+            <option value="multi">Multi-thread daily mix (up to 3 threads)</option>
+            <option value="single_thread">Single-thread episode (~5 min focus)</option>
+          </select>
+
+          <label className="mt-5 flex items-center gap-3 text-sm text-slate-300">
+            <input
+              checked={queueInBackground}
+              className="h-4 w-4 rounded border-white/20 bg-slate-900 accent-cyan-400"
+              onChange={(event) => setQueueInBackground(event.target.checked)}
+              type="checkbox"
+            />
+            Queue in background (recommended for long runs)
+          </label>
+        </section>
+
+        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
           <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Status</p>
           <p className="mt-3 text-sm leading-7 text-slate-300">{status}</p>
 
@@ -756,7 +814,7 @@ export function SettingsForm({
             </button>
             <button
               className="inline-flex rounded-full border border-amber-400/50 bg-amber-400/10 px-5 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-300/80 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={onDemandBusy || isSaving || subreddits.length === 0}
+              disabled={onDemandBusy || isSaving || (subreddits.length === 0 && !redditPostReference.trim())}
               onClick={() => {
                 void handleOnDemandDigest();
               }}

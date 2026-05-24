@@ -33,6 +33,8 @@ const serverEnvSchema = z.object({
   ),
   OPENAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1)),
   OPENAI_MODEL: z.preprocess(emptyStringToUndefined, z.string().default("gpt-4o-mini")),
+  OPENAI_SUMMARY_MODEL: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  OPENAI_SCRIPT_MODEL: z.preprocess(emptyStringToUndefined, z.string().optional()),
   OPENAI_TTS_MODEL: z.preprocess(
     emptyStringToUndefined,
     z.string().default("gpt-4o-mini-tts"),
@@ -43,9 +45,8 @@ const serverEnvSchema = z.object({
   REDDIT_USER_AGENT: z.preprocess(emptyStringToUndefined, z.string().min(1)),
   AUDIO_PROVIDER: z.preprocess(
     emptyStringToUndefined,
-    z.enum(["openai", "elevenlabs", "assemblyai"]).default("openai"),
+    z.enum(["openai", "elevenlabs"]).default("openai"),
   ),
-  ASSEMBLYAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
   ELEVENLABS_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
   ELEVENLABS_MODEL: z.preprocess(
     emptyStringToUndefined,
@@ -70,6 +71,11 @@ const serverEnvSchema = z.object({
     emptyStringToUndefined,
     z.enum(["dialogue", "monologue"]).default("dialogue"),
   ),
+  DIGEST_EPISODE_MODE: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(["multi", "single_thread"]).default("multi"),
+  ),
+  PIPELINE_JOBS_MAX_PER_TICK: z.preprocess(emptyStringToUndefined, z.coerce.number().default(1)),
 });
 
 export const publicEnv = publicEnvSchema.parse({
@@ -86,13 +92,14 @@ export function getServerEnv() {
     SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENAI_MODEL: process.env.OPENAI_MODEL,
+    OPENAI_SUMMARY_MODEL: process.env.OPENAI_SUMMARY_MODEL,
+    OPENAI_SCRIPT_MODEL: process.env.OPENAI_SCRIPT_MODEL,
     OPENAI_TTS_MODEL: process.env.OPENAI_TTS_MODEL,
     OPENAI_TTS_VOICE: process.env.OPENAI_TTS_VOICE,
     REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
     REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
     REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
     AUDIO_PROVIDER: process.env.AUDIO_PROVIDER,
-    ASSEMBLYAI_API_KEY: process.env.ASSEMBLYAI_API_KEY,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     ELEVENLABS_MODEL: process.env.ELEVENLABS_MODEL,
     ELEVENLABS_VOICE: process.env.ELEVENLABS_VOICE,
@@ -104,10 +111,20 @@ export function getServerEnv() {
     ELEVENLABS_VOICE_HOST_A: process.env.ELEVENLABS_VOICE_HOST_A,
     ELEVENLABS_VOICE_HOST_B: process.env.ELEVENLABS_VOICE_HOST_B,
     DIGEST_SCRIPT_MODE: process.env.DIGEST_SCRIPT_MODE,
+    DIGEST_EPISODE_MODE: process.env.DIGEST_EPISODE_MODE,
+    PIPELINE_JOBS_MAX_PER_TICK: process.env.PIPELINE_JOBS_MAX_PER_TICK,
   });
 }
 
 export type ServerEnv = ReturnType<typeof getServerEnv>;
+
+export function resolveOpenAiSummaryModel(env: ServerEnv) {
+  return env.OPENAI_SUMMARY_MODEL?.trim() || env.OPENAI_MODEL;
+}
+
+export function resolveOpenAiScriptModel(env: ServerEnv) {
+  return env.OPENAI_SCRIPT_MODEL?.trim() || env.OPENAI_MODEL;
+}
 
 export function elevenLabsDefaultVoiceSettings(env: ServerEnv) {
   return {
@@ -131,6 +148,10 @@ export function hasSupabaseAdminEnv() {
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
+}
+
+export function isDevelopment() {
+  return process.env.NODE_ENV !== "production";
 }
 
 export function getSupabaseBrowserKey() {

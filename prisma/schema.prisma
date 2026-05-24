@@ -151,7 +151,8 @@ model Comment {
 
 model DigestRun {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  run_date      DateTime  @unique @db.Date
+  run_date      DateTime  @db.Date
+  owner_user_id String?   @db.Uuid
   status        String
   started_at    DateTime  @default(now()) @db.Timestamptz(6)
   completed_at  DateTime? @db.Timestamptz(6)
@@ -160,6 +161,7 @@ model DigestRun {
   digests Digest[]
 
   @@index([run_date(sort: Desc)])
+  @@index([owner_user_id, run_date(sort: Desc)])
   @@map("digest_runs")
   @@schema("public")
 }
@@ -224,5 +226,40 @@ model JobLog {
 
   @@index([job_name, created_at(sort: Desc)])
   @@map("job_logs")
+  @@schema("public")
+}
+
+model ThreadSummaryCache {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reddit_post_id String
+  persona        String
+  summary_depth  String
+  content_hash   String
+  why_it_matters String
+  summary        String
+  key_takeaways  Json     @default("[]")
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([reddit_post_id, persona, summary_depth, content_hash])
+  @@index([reddit_post_id, persona, summary_depth, content_hash])
+  @@map("thread_summary_cache")
+  @@schema("public")
+}
+
+model PipelineJob {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_user_id String?   @db.Uuid
+  status        String
+  payload       Json      @default("{}")
+  result        Json?
+  error_message String?
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  started_at    DateTime? @db.Timestamptz(6)
+  completed_at  DateTime? @db.Timestamptz(6)
+
+  @@index([status, created_at(sort: Asc)])
+  @@index([owner_user_id, created_at(sort: Desc)])
+  @@map("pipeline_jobs")
   @@schema("public")
 }

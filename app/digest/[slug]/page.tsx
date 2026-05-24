@@ -1,12 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AuthHeader } from "@/components/auth-header";
-import { AudioPlayer } from "@/components/audio-player";
 import { BrandMark } from "@/components/brand-mark";
+import { DigestAudioSection } from "@/components/digest-audio-section";
 import { KeyThoughtsPanel } from "@/components/key-thoughts-panel";
+import { publicEnv } from "@/lib/config";
 import { formatDigestDate } from "@/lib/date";
 import { getPublishedDigestBySlug } from "@/lib/data/digests";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 interface DigestPageProps {
   params: Promise<{
@@ -14,16 +17,82 @@ interface DigestPageProps {
   }>;
 }
 
-export default async function DigestPage({ params }: DigestPageProps) {
+export async function generateMetadata({ params }: DigestPageProps): Promise<Metadata> {
   const { slug } = await params;
   const episode = await getPublishedDigestBySlug(slug);
+
+  if (!episode) {
+    return {
+      title: "Digest not found",
+    };
+  }
+
+  const pageUrl = `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/digest/${slug}`;
+  const description = episode.introText || episode.summary.slice(0, 160);
+
+  return {
+    title: episode.title,
+    description,
+    alternates: {
+      canonical: pageUrl,
+    },
+    openGraph: {
+      type: "article",
+      url: pageUrl,
+      title: episode.title,
+      description,
+      publishedTime: episode.publishedAt,
+      tags: episode.topics,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: episode.title,
+      description,
+    },
+  };
+}
+
+export default async function DigestPage({ params }: DigestPageProps) {
+  const { slug } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const episode = await getPublishedDigestBySlug(slug, user?.id ?? null);
 
   if (!episode) {
     notFound();
   }
 
+  const pageUrl = `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/digest/${slug}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "PodcastEpisode",
+    name: episode.title,
+    description: episode.introText || episode.summary,
+    datePublished: episode.publishedAt,
+    url: pageUrl,
+    duration: `PT${Math.max(1, episode.durationSeconds)}S`,
+    associatedMedia: episode.audioUrl
+      ? {
+          "@type": "MediaObject",
+          contentUrl: episode.audioUrl,
+        }
+      : undefined,
+    partOfSeries: {
+      "@type": "PodcastSeries",
+      name: "Reddit Voice Digest",
+      url: publicEnv.NEXT_PUBLIC_APP_URL,
+    },
+  };
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-8 px-4 py-8 sm:px-6 lg:px-10">
+      <script
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        type="application/ld+json"
+      />
+
       <header className="flex flex-col gap-5 rounded-[2rem] border border-white/10 bg-white/5 p-6 md:flex-row md:items-center md:justify-between">
         <BrandMark />
         <div className="flex flex-wrap items-center gap-3">
@@ -56,14 +125,7 @@ export default async function DigestPage({ params }: DigestPageProps) {
         </div>
 
         <div className="mt-8 w-full">
-          <AudioPlayer
-            audioUrl={episode.audioUrl}
-            chapters={episode.chapters}
-            durationSeconds={episode.durationSeconds}
-            nowPlayingTitle={episode.title}
-            playlistItems={episode.items}
-            variant="radio"
-          />
+          <DigestAudioSection episode={episode} />
         </div>
       </section>
 

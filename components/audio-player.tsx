@@ -13,6 +13,7 @@ interface AudioPlayerProps {
   playlistItems?: DigestItem[];
   variant?: "default" | "radio";
   nowPlayingTitle?: string;
+  initialSeekSeconds?: number;
   onPlaybackChange?: (isPlaying: boolean) => void;
 }
 
@@ -38,6 +39,7 @@ export function AudioPlayer({
   playlistItems = [],
   variant = "default",
   nowPlayingTitle,
+  initialSeekSeconds = 0,
   onPlaybackChange,
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -141,6 +143,27 @@ export function AudioPlayer({
     setIsPlaying(false);
     setCurrentTime(0);
   }, [audioUrl, hasRealAudio]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !hasRealAudio || initialSeekSeconds <= 0) {
+      return;
+    }
+
+    const applySeek = () => {
+      const bounded = Math.min(Math.max(initialSeekSeconds, 0), durationSeconds);
+      audio.currentTime = bounded;
+      setCurrentTime(bounded);
+    };
+
+    if (audio.readyState >= 1) {
+      applySeek();
+      return;
+    }
+
+    audio.addEventListener("loadedmetadata", applySeek, { once: true });
+    return () => audio.removeEventListener("loadedmetadata", applySeek);
+  }, [audioUrl, durationSeconds, hasRealAudio, initialSeekSeconds]);
 
   const activeChapter = useMemo(() => {
     return (

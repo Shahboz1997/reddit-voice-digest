@@ -66,6 +66,7 @@ function subscribeToSubredditPreferences(onStoreChange: () => void) {
 
 export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
   const latestEpisode = episodes[0];
+  const hasEpisodes = episodes.length > 0;
   const selectedSubreddits = useSyncExternalStore(
     subscribeToSubredditPreferences,
     readStoredSubreddits,
@@ -73,20 +74,26 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
   );
 
   const personalizedTopics = useMemo(() => {
+    if (!latestEpisode) {
+      return [];
+    }
+
     return latestEpisode.topics.filter(
       (topic) =>
         selectedSubreddits.includes(topic) ||
         selectedSubreddits.includes(topic.toLowerCase()) ||
         topic === "finance",
     );
-  }, [latestEpisode.topics, selectedSubreddits]);
+  }, [latestEpisode, selectedSubreddits]);
 
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const headlineDate = formatDigestDate(latestEpisode.publishedAt, {
-    day: "numeric",
-    month: "long",
-  });
+  const headlineDate = latestEpisode
+    ? formatDigestDate(latestEpisode.publishedAt, {
+        day: "numeric",
+        month: "long",
+      })
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-10 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
@@ -107,56 +114,84 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
       </header>
 
       <section className="w-full space-y-6" id="player">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-4xl">
+        {!hasEpisodes ? (
+          <div className="radio-glass rounded-2xl border border-dashed border-white/15 p-10 text-center">
             <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
-              On air now
+              Station offline
             </p>
-            <h1 className="mt-3 font-display text-3xl font-black uppercase leading-[1.05] tracking-wide text-white sm:text-4xl lg:text-5xl">
-              Main Reddit stories
-              <span className="mt-1 block text-white/55">for {headlineDate}</span>
+            <h1 className="mt-4 font-display text-3xl font-black uppercase tracking-wide text-white sm:text-4xl">
+              No episodes yet
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 sm:text-base">{latestEpisode.summary}</p>
-          </div>
-
-          <div className="flex max-w-md flex-wrap gap-2">
-            {selectedSubreddits.map((subreddit) => (
-              <span
-                key={subreddit}
-                className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-white/70"
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-white/50 sm:text-base">
+              The database is connected but no public digest has been published. Run the daily pipeline cron,
+              use <code className="text-white/70">npm run pipeline:run</code> locally, or generate a personal episode
+              from <Link href="/settings">My lineup</Link> after signing in.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link
+                className="inline-flex rounded-full border border-[var(--radio-pink)]/40 bg-[var(--radio-pink)]/15 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-[var(--radio-pink)] transition hover:border-[var(--radio-pink)]"
+                href="/settings"
               >
-                r/{subreddit}
-              </span>
-            ))}
+                Open settings
+              </Link>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-4xl">
+                <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
+                  On air now
+                </p>
+                <h1 className="mt-3 font-display text-3xl font-black uppercase leading-[1.05] tracking-wide text-white sm:text-4xl lg:text-5xl">
+                  Main Reddit stories
+                  {headlineDate ? <span className="mt-1 block text-white/55">for {headlineDate}</span> : null}
+                </h1>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 sm:text-base">{latestEpisode.summary}</p>
+              </div>
 
-        <AudioPlayer
-          audioUrl={latestEpisode.audioUrl}
-          chapters={latestEpisode.chapters}
-          durationSeconds={latestEpisode.durationSeconds}
-          nowPlayingTitle={latestEpisode.title}
-          onPlaybackChange={setIsPlaying}
-          playlistItems={latestEpisode.items}
-          variant="radio"
-        />
+              <div className="flex max-w-md flex-wrap gap-2">
+                {selectedSubreddits.map((subreddit) => (
+                  <span
+                    key={subreddit}
+                    className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-white/70"
+                  >
+                    r/{subreddit}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-        <div className="flex flex-wrap gap-2">
-          {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
-            <span
-              key={topic}
-              className="rounded-md border border-[var(--radio-pink)]/25 bg-[var(--radio-pink)]/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]"
-            >
-              #{topic}
-            </span>
-          ))}
-        </div>
+            <AudioPlayer
+              audioUrl={latestEpisode.audioUrl}
+              chapters={latestEpisode.chapters}
+              durationSeconds={latestEpisode.durationSeconds}
+              nowPlayingTitle={latestEpisode.title}
+              onPlaybackChange={setIsPlaying}
+              playlistItems={latestEpisode.items}
+              variant="radio"
+            />
+
+            <div className="flex flex-wrap gap-2">
+              {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
+                <span
+                  key={topic}
+                  className="rounded-md border border-[var(--radio-pink)]/25 bg-[var(--radio-pink)]/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]"
+                >
+                  #{topic}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
-      <section className="grid gap-8 xl:grid-cols-[1fr_340px]" id="archive">
-        <KeyThoughtsPanel episode={latestEpisode} variant="radio" />
-        <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} variant="radio" />
-      </section>
+      {hasEpisodes ? (
+        <section className="grid gap-8 xl:grid-cols-[1fr_340px]" id="archive">
+          <KeyThoughtsPanel episode={latestEpisode} variant="radio" />
+          <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} variant="radio" />
+        </section>
+      ) : null}
     </main>
   );
 }
