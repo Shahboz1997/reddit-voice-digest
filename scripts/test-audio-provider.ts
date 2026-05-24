@@ -6,6 +6,14 @@ import path from "node:path";
 import { PERSONAS, personaTtsVoice } from "../lib/digest-persona";
 import type { PersonaId } from "../lib/types";
 
+interface AudioTestSampleResult {
+  persona: PersonaId;
+  voice: string;
+  file?: string;
+  bytes?: number;
+  error?: string;
+}
+
 /** Lets the script run when .env.local only has TTS keys (no Reddit/Supabase). */
 function ensureAudioTestEnvPlaceholders() {
   const placeholders: Record<string, string> = {
@@ -114,10 +122,7 @@ async function renderForProvider(
     return [];
   }
 
-  const results: Array<
-    | { persona: PersonaId; voice: string; file: string; bytes: number }
-    | { persona: PersonaId; voice: string; error: string }
-  > = [];
+  const results: AudioTestSampleResult[] = [];
 
   for (const { id: persona, label } of PERSONAS) {
     const voice = personaTtsVoice(persona, provider);
