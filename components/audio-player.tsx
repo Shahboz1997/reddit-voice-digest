@@ -61,18 +61,13 @@ export function AudioPlayer({
   const hasRealAudio = Boolean(audioUrl);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const isPlaybackActive = hasRealAudio && isPlaying;
   const isRadio = variant === "radio";
   const isSpotify = variant === "spotify";
 
   useEffect(() => {
-    onPlaybackChange?.(isPlaying);
-  }, [isPlaying, onPlaybackChange]);
-
-  useEffect(() => {
-    if (!hasRealAudio) {
-      setIsPlaying(false);
-    }
-  }, [hasRealAudio]);
+    onPlaybackChange?.(isPlaybackActive);
+  }, [isPlaybackActive, onPlaybackChange]);
 
   useEffect(() => {
     if (hasRealAudio) {
@@ -306,7 +301,7 @@ export function AudioPlayer({
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{displayTitle}</p>
                 <div className="truncate text-xs text-white/45">
-                  {isPlaying ? (
+                  {isPlaybackActive ? (
                     <span className="inline-flex items-center gap-2">
                       <Equalizer active className="!h-3 !gap-[2px] [&_.equalizer__bar]:w-[3px]" />
                       <span className="font-display text-[10px] font-bold uppercase tracking-wider text-[var(--radio-pink)]">
@@ -332,14 +327,14 @@ export function AudioPlayer({
                 <IconSkipBack className="h-5 w-5" />
               </button>
               <button
-                aria-label={isPlaying ? "Pause" : "Play"}
+                aria-label={isPlaybackActive ? "Pause" : "Play"}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 active:scale-95"
                 onClick={() => {
                   void togglePlayback();
                 }}
                 type="button"
               >
-                {isPlaying ? <IconPause className="h-5 w-5" /> : <IconPlay className="h-5 w-5" />}
+                {isPlaybackActive ? <IconPause className="h-5 w-5" /> : <IconPlay className="h-5 w-5" />}
               </button>
               <button
                 aria-label="Next segment"
@@ -407,14 +402,14 @@ export function AudioPlayer({
             <div className="radio-glass relative overflow-hidden rounded-2xl px-5 py-8 sm:px-10 sm:py-10">
               <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-between">
                 <button
-                  aria-label={isPlaying ? "Pause" : "Play"}
+                  aria-label={isPlaybackActive ? "Pause" : "Play"}
                   className="radio-play-btn group relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-[var(--radio-pink)] text-black transition hover:scale-[1.03] active:scale-[0.98] sm:h-32 sm:w-32"
                   onClick={() => {
                     void togglePlayback();
                   }}
                   type="button"
                 >
-                  {isPlaying ? (
+                  {isPlaybackActive ? (
                     <span className="flex gap-2">
                       <span className="h-10 w-2.5 rounded-sm bg-black" />
                       <span className="h-10 w-2.5 rounded-sm bg-black" />
@@ -510,7 +505,7 @@ export function AudioPlayer({
             }}
             type="button"
           >
-            {isPlaying ? "Pause" : "Play"}
+            {isPlaybackActive ? "Pause" : "Play"}
           </button>
 
           <div>

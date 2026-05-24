@@ -73,29 +73,6 @@ export function SettingsForm({
   const [lastDeliveryDigestSlug, setLastDeliveryDigestSlug] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  const persistLocalSnapshot = useCallback(() => {
-    const snapshot: LocalPreferences = {
-      subreddits,
-      notifications,
-      persona,
-      summaryDepth,
-      deliveryLocalTime: deliveryLocalTime || null,
-      deliveryWeekdaysOnly,
-      timezone,
-      elevenlabsVoiceId,
-    };
-    window.localStorage.setItem(preferencesStorageKey, JSON.stringify(snapshot));
-  }, [
-    deliveryLocalTime,
-    deliveryWeekdaysOnly,
-    timezone,
-    elevenlabsVoiceId,
-    notifications,
-    persona,
-    subreddits,
-    summaryDepth,
-  ]);
-
   const loadDeliveryStatus = useCallback(async () => {
     try {
       const response = await fetch("/api/delivery/status", { cache: "no-store" });
@@ -231,10 +208,6 @@ export function SettingsForm({
 
   const customVoiceActive =
     Boolean(elevenlabsVoiceId) && !isKnownElevenLabsVoiceId(elevenlabsVoiceId ?? "");
-
-  function addSubreddit(name: string) {
-    setSubreddits((current) => (current.includes(name) ? current : [...current, name]));
-  }
 
   function removeSubreddit(name: string) {
     setSubreddits((current) => current.filter((entry) => entry !== name));

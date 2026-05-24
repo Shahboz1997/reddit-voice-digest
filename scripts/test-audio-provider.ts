@@ -114,7 +114,10 @@ async function renderForProvider(
     return [];
   }
 
-  const results: { persona: PersonaId; voice: string; file: string; bytes: number }[] = [];
+  const results: Array<
+    | { persona: PersonaId; voice: string; file: string; bytes: number }
+    | { persona: PersonaId; voice: string; error: string }
+  > = [];
 
   for (const { id: persona, label } of PERSONAS) {
     const voice = personaTtsVoice(persona, provider);

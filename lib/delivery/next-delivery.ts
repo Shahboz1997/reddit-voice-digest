@@ -42,8 +42,6 @@ export function describeNextDelivery(input: {
       continue;
     }
 
-    const dateKey = localDateKey(probe, timeZone);
-
     if (dayOffset === 0) {
       const currentMinutes = minutesSinceMidnight(localTimeHHMM(now, timeZone));
       const passedWindow =
