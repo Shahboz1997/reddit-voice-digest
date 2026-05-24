@@ -43,21 +43,22 @@ export function ShareAudioClipLink({
   };
 
   return (
-    <div>
-      <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">Shareable clip</p>
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200">
-          {clipLabel} · starts at {formatClipTime(startSeconds)}
-        </span>
-        <button
-          className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/20"
-          onClick={onCopy}
-          type="button"
-        >
-          Copy clip link
-        </button>
-      </div>
-      {status ? <p className="mt-2 text-sm text-slate-400">{status}</p> : null}
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <span
+        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/60"
+        title={`Starts at ${formatClipTime(startSeconds)}`}
+      >
+        {clipLabel} · {formatClipTime(startSeconds)}
+      </span>
+      <button
+        aria-label="Copy clip link"
+        className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--radio-pink)]/30 bg-[var(--radio-pink)]/10 px-4 text-xs font-bold uppercase tracking-wider text-[var(--radio-pink)] transition hover:bg-[var(--radio-pink)]/20"
+        onClick={onCopy}
+        type="button"
+      >
+        Copy link
+      </button>
+      {status ? <span className="text-xs text-white/40">{status}</span> : null}
     </div>
   );
 }

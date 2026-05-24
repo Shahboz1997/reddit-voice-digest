@@ -14,6 +14,7 @@
     "db:setup": "npm run db:seed-sources",
     "db:seed-sources": "tsx scripts/seed-sources.ts",
     "pipeline:run": "tsx scripts/run-pipeline.ts",
+    "audio:test": "node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs scripts/test-audio-provider.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:baseline": "node scripts/prisma-baseline.cjs",

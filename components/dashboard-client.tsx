@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { ArchiveSidebar } from "@/components/archive-sidebar";
-import { AuthHeader } from "@/components/auth-header";
 import { AudioPlayer } from "@/components/audio-player";
-import { BrandMark } from "@/components/brand-mark";
-import { KeyThoughtsPanel } from "@/components/key-thoughts-panel";
-import { LiveOnAirBadge } from "@/components/live-on-air-badge";
+import { BroadcastPlaylist } from "@/components/broadcast-playlist";
+import { EpisodeCoverArt } from "@/components/subreddit-art";
+import { InsightDrawer } from "@/components/insight-drawer";
+import { PlayerShell } from "@/components/player-shell";
+import { ThreadDetailDrawer } from "@/components/thread-detail-drawer";
 import { defaultSubredditPreferences } from "@/lib/catalog";
 import { formatDigestDate } from "@/lib/date";
-import type { DigestEpisode } from "@/lib/types";
+import { IconDocument, IconList, IconSettings } from "@/lib/ui-icons";
+import type { DigestChapter, DigestEpisode, DigestItem } from "@/lib/types";
 
 interface DashboardClientProps {
   episodes: DigestEpisode[];
@@ -45,7 +47,7 @@ function readStoredSubreddits(): readonly string[] {
       return cachedSubreddits;
     }
   } catch {
-    // If local storage is missing or malformed, the dashboard falls back to defaults.
+    // fall through
   }
 
   cachedSubreddits = defaultSubredditPreferences;
@@ -73,6 +75,17 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
     () => defaultSubredditPreferences,
   );
 
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [activeChapter, setActiveChapter] = useState<DigestChapter | undefined>();
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [threadDetail, setThreadDetail] = useState<DigestItem | null>(null);
+  const [seekRequest, setSeekRequest] = useState<{ seconds: number; token: number } | undefined>();
+
+  const headlineDate = latestEpisode
+    ? formatDigestDate(latestEpisode.publishedAt, { day: "numeric", month: "short" })
+    : null;
+
   const personalizedTopics = useMemo(() => {
     if (!latestEpisode) {
       return [];
@@ -86,112 +99,119 @@ export function DashboardClient({ episodes, rssUrl }: DashboardClientProps) {
     );
   }, [latestEpisode, selectedSubreddits]);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const headlineDate = latestEpisode
-    ? formatDigestDate(latestEpisode.publishedAt, {
-        day: "numeric",
-        month: "long",
-      })
-    : null;
+  const player = hasEpisodes && latestEpisode ? (
+    <AudioPlayer
+      audioUrl={latestEpisode.audioUrl}
+      chapters={latestEpisode.chapters}
+      durationSeconds={latestEpisode.durationSeconds}
+      nowPlayingTitle={latestEpisode.title}
+      onPlaybackChange={setIsPlaying}
+      onTimeUpdate={(time, chapter) => {
+        setCurrentTime(time);
+        setActiveChapter(chapter);
+      }}
+      playlistItems={latestEpisode.items}
+      seekRequest={seekRequest}
+      variant="spotify"
+    />
+  ) : null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-10 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <LiveOnAirBadge active={isPlaying} />
-
-      <header className="radio-glass flex flex-col gap-5 rounded-2xl p-5 md:flex-row md:items-center md:justify-between" id="about">
-        <BrandMark />
-
-        <div className="flex flex-wrap items-center gap-3">
-          <AuthHeader />
+    <PlayerShell isPlaying={isPlaying} player={player} rssUrl={rssUrl}>
+      {!hasEpisodes ? (
+        <div className="radio-glass flex min-h-[50vh] flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 p-10 text-center">
+          <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
+            Offline
+          </p>
+          <h1 className="mt-4 font-display text-3xl font-black uppercase tracking-wide text-white">No episodes</h1>
           <Link
-            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 font-display text-xs font-bold uppercase tracking-wider text-white transition hover:border-[var(--radio-pink)]/50 hover:text-[var(--radio-pink)]"
+            className="mt-8 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--radio-pink)]/20 text-[var(--radio-pink)] ring-1 ring-[var(--radio-pink)]/40"
             href="/settings"
+            title="Settings"
           >
-            My lineup
+            <IconSettings className="h-5 w-5" />
           </Link>
         </div>
-      </header>
-
-      <section className="w-full space-y-6" id="player">
-        {!hasEpisodes ? (
-          <div className="radio-glass rounded-2xl border border-dashed border-white/15 p-10 text-center">
-            <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
-              Station offline
-            </p>
-            <h1 className="mt-4 font-display text-3xl font-black uppercase tracking-wide text-white sm:text-4xl">
-              No episodes yet
-            </h1>
-            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-white/50 sm:text-base">
-              The database is connected but no public digest has been published. Run the daily pipeline cron,
-              use <code className="text-white/70">npm run pipeline:run</code> locally, or generate a personal episode
-              from <Link href="/settings">My lineup</Link> after signing in.
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link
-                className="inline-flex rounded-full border border-[var(--radio-pink)]/40 bg-[var(--radio-pink)]/15 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-[var(--radio-pink)] transition hover:border-[var(--radio-pink)]"
-                href="/settings"
-              >
-                Open settings
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-4xl">
-                <p className="font-display text-[10px] font-bold uppercase tracking-[0.45em] text-[var(--radio-yellow)]">
-                  On air now
-                </p>
-                <h1 className="mt-3 font-display text-3xl font-black uppercase leading-[1.05] tracking-wide text-white sm:text-4xl lg:text-5xl">
-                  Main Reddit stories
-                  {headlineDate ? <span className="mt-1 block text-white/55">for {headlineDate}</span> : null}
-                </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/50 sm:text-base">{latestEpisode.summary}</p>
+      ) : (
+        <div className="space-y-6">
+          <section className="flex flex-col gap-6 lg:flex-row lg:items-start" id="player">
+            <div className="radio-glass flex flex-1 flex-col items-center justify-center rounded-2xl px-6 py-8">
+              <div className="mb-4 flex w-full items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[var(--radio-pink)]/15 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-[var(--radio-pink)] ring-1 ring-[var(--radio-pink)]/30">
+                  <span className="live-dot live-dot--pulse" />
+                  {headlineDate ?? "Today"}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    aria-label="Open TL;DR"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/50 transition hover:border-[var(--radio-pink)]/40 hover:text-[var(--radio-pink)]"
+                    onClick={() => setInsightsOpen(true)}
+                    title="TL;DR"
+                    type="button"
+                  >
+                    <IconDocument className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
+              <EpisodeCoverArt title={latestEpisode.title} topics={latestEpisode.topics} />
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
+                  <span
+                    key={topic}
+                    className="rounded-md border border-[var(--radio-pink)]/25 bg-[var(--radio-pink)]/10 px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-[var(--radio-pink)]"
+                    title={topic}
+                  >
+                    #{topic}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-              <div className="flex max-w-md flex-wrap gap-2">
+            <div className="radio-glass min-h-[320px] w-full rounded-2xl p-4 lg:max-w-md xl:max-w-lg">
+              <BroadcastPlaylist
+                activeChapterId={activeChapter?.id}
+                chapters={latestEpisode.chapters}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                items={latestEpisode.items}
+                onItemInfo={setThreadDetail}
+                onSelect={(seconds) => {
+                  setSeekRequest({ seconds, token: Date.now() });
+                }}
+                variant="spotify"
+              />
+            </div>
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-[1fr_300px]" id="archive">
+            <div className="radio-glass rounded-2xl p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <IconList className="h-5 w-5 text-[var(--radio-yellow)]" />
+                <span className="font-display text-xs font-bold uppercase tracking-wider text-white/70">Stations</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {selectedSubreddits.map((subreddit) => (
                   <span
                     key={subreddit}
-                    className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-white/70"
+                    className="rounded-md border border-white/10 bg-white/5 px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-white/70"
+                    title={`r/${subreddit}`}
                   >
                     r/{subreddit}
                   </span>
                 ))}
               </div>
             </div>
+            <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} variant="spotify" />
+          </section>
+        </div>
+      )}
 
-            <AudioPlayer
-              audioUrl={latestEpisode.audioUrl}
-              chapters={latestEpisode.chapters}
-              durationSeconds={latestEpisode.durationSeconds}
-              nowPlayingTitle={latestEpisode.title}
-              onPlaybackChange={setIsPlaying}
-              playlistItems={latestEpisode.items}
-              variant="radio"
-            />
-
-            <div className="flex flex-wrap gap-2">
-              {(personalizedTopics.length ? personalizedTopics : latestEpisode.topics).map((topic) => (
-                <span
-                  key={topic}
-                  className="rounded-md border border-[var(--radio-pink)]/25 bg-[var(--radio-pink)]/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]"
-                >
-                  #{topic}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-
-      {hasEpisodes ? (
-        <section className="grid gap-8 xl:grid-cols-[1fr_340px]" id="archive">
-          <KeyThoughtsPanel episode={latestEpisode} variant="radio" />
-          <ArchiveSidebar episodes={episodes} rssUrl={rssUrl} variant="radio" />
-        </section>
+      {latestEpisode ? (
+        <>
+          <InsightDrawer episode={latestEpisode} onClose={() => setInsightsOpen(false)} open={insightsOpen} />
+          <ThreadDetailDrawer item={threadDetail} onClose={() => setThreadDetail(null)} />
+        </>
       ) : null}
-    </main>
+    </PlayerShell>
   );
 }

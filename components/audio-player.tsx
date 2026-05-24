@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BroadcastPlaylist } from "@/components/broadcast-playlist";
+import { Equalizer } from "@/components/equalizer";
 import { PlaybackAudioVisualizer } from "@/components/playback-audio-visualizer";
+import { SubredditArt } from "@/components/subreddit-art";
+import {
+  IconPause,
+  IconPlay,
+  IconSkipBack,
+  IconSkipForward,
+  IconVolume,
+} from "@/lib/ui-icons";
 import type { DigestChapter, DigestItem } from "@/lib/types";
 
 interface AudioPlayerProps {
@@ -11,10 +20,13 @@ interface AudioPlayerProps {
   durationSeconds: number;
   chapters: DigestChapter[];
   playlistItems?: DigestItem[];
-  variant?: "default" | "radio";
+  variant?: "default" | "radio" | "spotify";
   nowPlayingTitle?: string;
   initialSeekSeconds?: number;
+  /** Parent-driven seek (e.g. queue row click). */
+  seekRequest?: { seconds: number; token: number };
   onPlaybackChange?: (isPlaying: boolean) => void;
+  onTimeUpdate?: (currentTime: number, activeChapter: DigestChapter | undefined) => void;
 }
 
 function formatTime(totalSeconds: number) {
@@ -40,7 +52,9 @@ export function AudioPlayer({
   variant = "default",
   nowPlayingTitle,
   initialSeekSeconds = 0,
+  seekRequest,
   onPlaybackChange,
+  onTimeUpdate,
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -48,6 +62,7 @@ export function AudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const isRadio = variant === "radio";
+  const isSpotify = variant === "spotify";
 
   useEffect(() => {
     onPlaybackChange?.(isPlaying);
@@ -175,7 +190,31 @@ export function AudioPlayer({
     );
   }, [chapters, currentTime]);
 
+  const activeChapterIndex = useMemo(() => {
+    if (!activeChapter) {
+      return 0;
+    }
+
+    const index = chapters.findIndex((chapter) => chapter.id === activeChapter.id);
+    return index >= 0 ? index : 0;
+  }, [activeChapter, chapters]);
+
+  const activeSubreddit = playlistItems[activeChapterIndex]?.subredditName ?? playlistItems[0]?.subredditName ?? "reddit";
+
+  useEffect(() => {
+    onTimeUpdate?.(currentTime, activeChapter);
+  }, [activeChapter, currentTime, onTimeUpdate]);
+
   const progress = durationSeconds > 0 ? Math.min((currentTime / durationSeconds) * 100, 100) : 0;
+
+  function skipChapter(direction: -1 | 1) {
+    const index = chapters.findIndex((chapter) => chapter.id === activeChapter?.id);
+    const next = chapters[index + direction];
+
+    if (next) {
+      seekTo(next.startSeconds);
+    }
+  }
 
   function togglePlayback() {
     if (hasRealAudio && audioRef.current) {
@@ -236,6 +275,122 @@ export function AudioPlayer({
     }
 
     setCurrentTime(bounded);
+  }
+
+  const seekToRef = useRef(seekTo);
+  seekToRef.current = seekTo;
+
+  useEffect(() => {
+    if (seekRequest == null) {
+      return;
+    }
+
+    seekToRef.current(seekRequest.seconds);
+  }, [seekRequest]);
+
+  if (isSpotify) {
+    const displayTitle = activeChapter?.label ?? nowPlayingTitle ?? "Reddit Voice Digest";
+
+    return (
+      <>
+        {audioUrl ? (
+          <audio key={audioUrl} ref={audioRef} crossOrigin="anonymous" preload="none">
+            <source src={audioUrl} />
+          </audio>
+        ) : null}
+
+        <footer className="spotify-player-bar fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#0a0a0a]/92 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2 sm:gap-4 sm:px-6">
+            <div className="flex min-w-0 flex-[1.2] items-center gap-3">
+              <SubredditArt size="md" subredditName={activeSubreddit} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{displayTitle}</p>
+                <div className="truncate text-xs text-white/45">
+                  {isPlaying ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Equalizer active className="!h-3 !gap-[2px] [&_.equalizer__bar]:w-[3px]" />
+                      <span className="font-display text-[10px] font-bold uppercase tracking-wider text-[var(--radio-pink)]">
+                        Live
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="font-mono tabular-nums">
+                      {formatTime(currentTime)} / {formatTime(durationSeconds)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
+              <button
+                aria-label="Previous segment"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white"
+                onClick={() => skipChapter(-1)}
+                type="button"
+              >
+                <IconSkipBack className="h-5 w-5" />
+              </button>
+              <button
+                aria-label={isPlaying ? "Pause" : "Play"}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 active:scale-95"
+                onClick={() => {
+                  void togglePlayback();
+                }}
+                type="button"
+              >
+                {isPlaying ? <IconPause className="h-5 w-5" /> : <IconPlay className="h-5 w-5" />}
+              </button>
+              <button
+                aria-label="Next segment"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white"
+                onClick={() => skipChapter(1)}
+                type="button"
+              >
+                <IconSkipForward className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="hidden min-w-0 flex-[1.5] items-center gap-3 md:flex">
+              <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-white/45">
+                {formatTime(currentTime)}
+              </span>
+              <input
+                aria-label="Seek"
+                className="radio-seek min-w-0 flex-1"
+                max={durationSeconds}
+                min={0}
+                onChange={(event) => {
+                  seekTo(Number(event.target.value));
+                }}
+                step={1}
+                type="range"
+                value={currentTime}
+              />
+              <span className="w-10 shrink-0 font-mono text-xs tabular-nums text-white/45">
+                {formatTime(durationSeconds)}
+              </span>
+              <IconVolume className="h-5 w-5 shrink-0 text-white/35" />
+            </div>
+          </div>
+
+          <div className="border-t border-white/5 px-3 pb-2 pt-1 md:hidden">
+            <input
+              aria-label="Seek"
+              className="radio-seek w-full"
+              max={durationSeconds}
+              min={0}
+              onChange={(event) => {
+                seekTo(Number(event.target.value));
+              }}
+              step={1}
+              type="range"
+              value={currentTime}
+            />
+          </div>
+        </footer>
+      </>
+    );
   }
 
   if (isRadio) {

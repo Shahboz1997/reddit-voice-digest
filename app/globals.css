@@ -5,6 +5,7 @@
   --radio-pink: #ff2d92;
   --radio-yellow: #ffd600;
   --radio-black: #000000;
+  --player-bar-height: 5.75rem;
 }
 
 html,
@@ -174,4 +175,41 @@ a {
 
 .site-footer-link {
   text-decoration: none;
+}
+
+/* Spotify-style app shell */
+.app-shell__main {
+  padding-bottom: calc(var(--player-bar-height) + 1rem);
+}
+
+body:has(.spotify-player-bar) .site-footer {
+  margin-bottom: var(--player-bar-height);
+}
+
+.spotify-player-bar {
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.55);
+}
+
+.insight-drawer {
+  animation: drawer-in 0.22s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-icon-rail {
+    display: none;
+  }
+
+  .app-shell {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
 }
