@@ -9,6 +9,7 @@ node_modules
 dist
 coverage
 tmp/
+tsconfig.tsbuildinfo
 *.log
 npm-debug.log*
 supabase/.branches
