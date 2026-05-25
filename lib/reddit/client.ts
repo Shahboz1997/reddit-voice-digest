@@ -1,4 +1,5 @@
 import { getServerEnv } from "@/lib/config";
+import { filterRedditComments } from "@/lib/reddit/noise-filter";
 import { calculateRankingScore } from "@/lib/ranking/score";
 
 interface RedditListingChild<T> {
@@ -144,14 +145,108 @@ export async function fetchThreadComments(postId: string, limit = 25) {
     ]
   >(`/comments/${postId}?sort=top&limit=${limit}`);
 
-  return payload[1].data.children
-    .map(({ data }) => ({
-      redditCommentId: data.id,
-      authorName: data.author,
-      body: data.body,
+  const rawComments = payload[1].data.children.map(({ data }) => ({
+    redditCommentId: data.id,
+    authorName: data.author,
+    body: data.body,
+    score: data.score,
+    depth: data.depth,
+    isOp: data.is_submitter,
+  }));
+
+  return filterRedditComments(
+    rawComments.filter((comment) => comment.body && comment.body.length >= 50),
+    limit,
+  );
+}
+
+export function parseRedditPostReference(input: string) {
+  const trimmed = input.trim();
+
+  const directIdMatch = trimmed.match(/^[a-z0-9]{5,8}$/i);
+  if (directIdMatch) {
+    return { postId: directIdMatch[0] };
+  }
+
+  const urlMatch = trimmed.match(
+    /reddit\.com\/r\/([^/]+)\/comments\/([a-z0-9]+)(?:\/([^/?#]+))?/i,
+  );
+
+  if (urlMatch) {
+    return {
+      subreddit: urlMatch[1],
+      postId: urlMatch[2],
+      slug: urlMatch[3],
+    };
+  }
+
+  return null;
+}
+
+function mapRedditPost(data: {
+  id: string;
+  subreddit: string;
+  title: string;
+  selftext: string;
+  author: string;
+  permalink: string;
+  url: string;
+  score: number;
+  num_comments: number;
+  created_utc: number;
+}): RedditThread {
+  return {
+    redditPostId: data.id,
+    subredditName: data.subreddit,
+    title: data.title,
+    selftext: data.selftext,
+    authorName: data.author,
+    permalink: `https://www.reddit.com${data.permalink}`,
+    url: data.url,
+    score: data.score,
+    numComments: data.num_comments,
+    createdUtc: data.created_utc,
+    rankingScore: calculateRankingScore({
       score: data.score,
-      depth: data.depth,
-      isOp: data.is_submitter,
-    }))
-    .filter((comment) => comment.body && comment.body.length >= 50);
+      numComments: data.num_comments,
+      ageHours: Math.max(0, (Date.now() / 1000 - data.created_utc) / 3600),
+      selfTextLength: data.selftext.length,
+    }),
+  };
+}
+
+export async function fetchThreadById(postId: string) {
+  const payload = await redditGet<
+    [
+      RedditListing<{
+        id: string;
+        subreddit: string;
+        title: string;
+        selftext: string;
+        author: string;
+        permalink: string;
+        url: string;
+        score: number;
+        num_comments: number;
+        created_utc: number;
+      }>,
+      RedditListing<Record<string, never>>,
+    ]
+  >(`/comments/${postId}?sort=top&limit=1`);
+
+  const post = payload[0]?.data?.children?.[0]?.data;
+  if (!post) {
+    throw new Error(`Reddit post ${postId} was not found.`);
+  }
+
+  return mapRedditPost(post);
+}
+
+export async function fetchThreadByReference(reference: string) {
+  const parsed = parseRedditPostReference(reference);
+  if (!parsed) {
+    throw new Error("Provide a valid Reddit post URL or post id.");
+  }
+
+  return fetchThreadById(parsed.postId);
 }

@@ -2,6 +2,10 @@
 
 :root {
   color-scheme: dark;
+  --radio-pink: #ff2d92;
+  --radio-yellow: #ffd600;
+  --radio-black: #000000;
+  --player-bar-height: 5.75rem;
 }
 
 html,
@@ -10,13 +14,202 @@ body {
 }
 
 body {
-  background:
-    radial-gradient(circle at top, rgba(34, 211, 238, 0.16), transparent 30%),
-    linear-gradient(180deg, #020617 0%, #0f172a 100%);
-  color: #e2e8f0;
+  background-color: var(--radio-black);
+  color: #f5f5f5;
+}
+
+.font-display {
+  font-family: var(--font-montserrat), "Montserrat", "Inter", system-ui, sans-serif;
+}
+
+/* Ambient blur blobs (Radio Record vibe) */
+.radio-ambient {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.radio-ambient__pink {
+  position: absolute;
+  top: -12rem;
+  left: -10rem;
+  width: min(52rem, 90vw);
+  height: min(52rem, 90vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 45, 146, 0.14) 0%, transparent 68%);
+  filter: blur(80px);
+}
+
+.radio-ambient__yellow {
+  position: absolute;
+  right: -12rem;
+  bottom: -14rem;
+  width: min(48rem, 85vw);
+  height: min(48rem, 85vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 0, 0.12) 0%, transparent 68%);
+  filter: blur(80px);
+}
+
+.radio-glass {
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.live-dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ff1a1a;
+  box-shadow:
+    0 0 10px rgba(255, 26, 26, 0.9),
+    0 0 20px rgba(255, 26, 26, 0.45);
+}
+
+.live-dot--pulse {
+  animation: live-blink 1.15s ease-in-out infinite;
+}
+
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+
+.radio-play-btn {
+  box-shadow:
+    0 0 40px rgba(255, 45, 146, 0.55),
+    0 0 90px rgba(255, 45, 146, 0.35),
+    0 0 140px rgba(255, 45, 146, 0.15);
+}
+
+.radio-play-btn:hover {
+  box-shadow:
+    0 0 50px rgba(255, 45, 146, 0.7),
+    0 0 100px rgba(255, 45, 146, 0.45),
+    0 0 160px rgba(255, 45, 146, 0.2);
+}
+
+.radio-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.radio-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--radio-pink);
+  box-shadow: 0 0 12px rgba(255, 45, 146, 0.8);
+  cursor: pointer;
+}
+
+.radio-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--radio-pink);
+  box-shadow: 0 0 12px rgba(255, 45, 146, 0.8);
+  cursor: pointer;
+}
+
+/* Equalizer */
+.equalizer__bar {
+  height: 18%;
+  opacity: 0.35;
+  transition: opacity 0.2s ease;
+}
+
+.equalizer--active .equalizer__bar {
+  opacity: 1;
+  animation: equalizer-bounce 0.75s ease-in-out infinite alternate;
+}
+
+@keyframes equalizer-bounce {
+  0% {
+    height: 12%;
+  }
+  100% {
+    height: 100%;
+  }
+}
+
+.broadcast-playlist-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 45, 146, 0.4) transparent;
+}
+
+.broadcast-playlist-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.broadcast-playlist-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 45, 146, 0.45);
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.site-footer-link {
+  text-decoration: none;
+}
+
+/* Spotify-style app shell */
+.app-shell__main {
+  padding-bottom: calc(var(--player-bar-height) + 1rem);
+}
+
+body:has(.spotify-player-bar) .site-footer {
+  margin-bottom: var(--player-bar-height);
+}
+
+.spotify-player-bar {
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.55);
+}
+
+.insight-drawer {
+  animation: drawer-in 0.22s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-icon-rail {
+    display: none;
+  }
+
+  .app-shell {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
 }

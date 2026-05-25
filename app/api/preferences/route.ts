@@ -6,6 +6,8 @@ import {
   defaultSubredditPreferences,
 } from "@/lib/catalog";
 import { hasSupabaseBrowserEnv, publicEnv } from "@/lib/config";
+import { normalizeTimezone } from "@/lib/delivery/timezone";
+import { normalizeElevenLabsVoiceIdInput } from "@/lib/elevenlabs/voices";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type {
   NotificationPreference,
@@ -30,7 +32,12 @@ const requestSchema = z.object({
     .optional()
     .transform((v) => (v === "" || v === undefined ? null : v)),
   deliveryWeekdaysOnly: z.boolean().default(false),
+  timezone: z.string().min(1).max(64).optional().transform((value) => normalizeTimezone(value)),
   notifications: z.array(notificationSchema),
+  elevenlabsVoiceId: z
+    .union([z.string(), z.null()])
+    .optional()
+    .transform((value) => normalizeElevenLabsVoiceIdInput(value)),
 });
 
 function buildDefaultResponse() {
@@ -42,6 +49,8 @@ function buildDefaultResponse() {
     summaryDepth: "standard" as SummaryDepthId,
     deliveryLocalTime: null as string | null,
     deliveryWeekdaysOnly: false,
+    timezone: "UTC",
+    elevenlabsVoiceId: null as string | null,
     personalRssUrl: null as string | null,
     userApiRssUrl: null as string | null,
   };
@@ -90,7 +99,7 @@ export async function GET() {
     supabase
       .from("user_preferences")
       .select(
-        "selected_subreddits, delivery_local_time, voice, summary_depth, delivery_weekdays_only",
+        "selected_subreddits, delivery_local_time, voice, elevenlabs_voice_id, summary_depth, delivery_weekdays_only, timezone",
       )
       .eq("user_id", user.id)
       .maybeSingle(),
@@ -116,7 +125,13 @@ export async function GET() {
   const profileError = profileRes.error;
 
   if (prefsError || subredditError || notificationError || profileError) {
-    return NextResponse.json(buildDefaultResponse());
+    const message =
+      prefsError?.message ??
+      subredditError?.message ??
+      notificationError?.message ??
+      profileError?.message ??
+      "Failed to load preferences.";
+    return NextResponse.json({ error: message }, { status: 503 });
   }
 
   const profile = profileRes.data;
@@ -155,6 +170,8 @@ export async function GET() {
       ((prefsRow?.summary_depth as SummaryDepthId) ?? (profile?.summary_depth as SummaryDepthId)) ?? "standard",
     deliveryLocalTime: deliveryFromPrefs ?? deliveryFromProfile,
     deliveryWeekdaysOnly: prefsRow?.delivery_weekdays_only ?? profile?.delivery_weekdays_only ?? false,
+    timezone: normalizeTimezone(prefsRow?.timezone as string | undefined),
+    elevenlabsVoiceId: normalizeElevenLabsVoiceIdInput(prefsRow?.elevenlabs_voice_id),
     personalRssUrl: profile?.rss_feed_token ? personalFeedUrlForToken(profile.rss_feed_token) : null,
     userApiRssUrl: userApiRssUrlForUser(user.id),
   });
@@ -222,9 +239,11 @@ export async function PUT(request: Request) {
           user_id: user.id,
           selected_subreddits: payload.subreddits,
           voice: payload.persona,
+          elevenlabs_voice_id: payload.elevenlabsVoiceId,
           summary_depth: payload.summaryDepth,
           delivery_local_time: deliveryTimeForDb(payload.deliveryLocalTime ?? null),
           delivery_weekdays_only: payload.deliveryWeekdaysOnly,
+          timezone: payload.timezone ?? "UTC",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" },

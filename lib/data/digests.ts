@@ -1,4 +1,4 @@
-import { hasSupabaseAdminEnv } from "@/lib/config";
+import { hasSupabaseAdminEnv, isDevelopment } from "@/lib/config";
 import { demoEpisodes } from "@/lib/demo-data";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import type { DigestEpisode, DigestItem } from "@/lib/types";
@@ -96,16 +96,20 @@ async function fetchPublishedEpisodes(
   return (digests as DigestRow[]).map((digest) => mapDigestRowToEpisode(digest, digestItems as DigestItemRow[], threadMap));
 }
 
+function developmentDemoFallback() {
+  return isDevelopment() ? demoEpisodes : [];
+}
+
 export async function getPublishedDigests() {
   if (!hasSupabaseAdminEnv()) {
-    return demoEpisodes;
+    return developmentDemoFallback();
   }
 
   try {
     const episodes = await fetchPublishedEpisodes({ kind: "public" });
-    return episodes?.length ? episodes : demoEpisodes;
+    return episodes?.length ? episodes : developmentDemoFallback();
   } catch {
-    return demoEpisodes;
+    return developmentDemoFallback();
   }
 }
 
@@ -123,9 +127,63 @@ export async function getPublishedDigestsForOwner(ownerUserId: string): Promise<
   }
 }
 
-export async function getPublishedDigestBySlug(slug: string) {
-  const digests = await getPublishedDigests();
-  return digests.find((digest) => digest.slug === slug) ?? null;
+export async function getPublishedDigestBySlug(slug: string, viewerUserId?: string | null) {
+  if (!hasSupabaseAdminEnv()) {
+    return developmentDemoFallback().find((digest) => digest.slug === slug) ?? null;
+  }
+
+  try {
+    const supabase = createAdminSupabaseClient();
+    let query = supabase
+      .from("digests")
+      .select(
+        "id, slug, title, intro_text, summary_text, transcript_text, audio_url, duration_seconds, published_at, topics, owner_user_id",
+      )
+      .eq("slug", slug)
+      .not("published_at", "is", null);
+
+    if (viewerUserId) {
+      query = query.or(`owner_user_id.is.null,owner_user_id.eq.${viewerUserId}`);
+    } else {
+      query = query.is("owner_user_id", null);
+    }
+
+    const { data: digest, error } = await query.maybeSingle();
+
+    if (error || !digest) {
+      return null;
+    }
+
+    const { data: digestItems, error: digestItemsError } = await supabase
+      .from("digest_items")
+      .select(
+        "id, digest_id, thread_id, position, thread_summary, key_takeaways, tldr_points, why_it_matters, reddit_thread_url, reddit_comment_url, audio_start_seconds, audio_end_seconds",
+      )
+      .eq("digest_id", digest.id)
+      .order("position", { ascending: true });
+
+    if (digestItemsError) {
+      return null;
+    }
+
+    const threadIds = Array.from(
+      new Set(
+        ((digestItems ?? []) as DigestItemRow[])
+          .map((item) => item.thread_id)
+          .filter((threadId): threadId is string => Boolean(threadId)),
+      ),
+    );
+
+    const { data: threads } = threadIds.length
+      ? await supabase.from("threads").select("id, title, subreddit_name").in("id", threadIds)
+      : { data: [] as ThreadRow[] };
+
+    const threadMap = new Map(((threads ?? []) as ThreadRow[]).map((thread) => [thread.id, thread]));
+
+    return mapDigestRowToEpisode(digest as DigestRow, (digestItems ?? []) as DigestItemRow[], threadMap);
+  } catch {
+    return developmentDemoFallback().find((digest) => digest.slug === slug) ?? null;
+  }
 }
 
 function mapDigestRowToEpisode(

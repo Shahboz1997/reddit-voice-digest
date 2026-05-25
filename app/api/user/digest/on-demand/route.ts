@@ -1,22 +1,33 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { defaultSubredditPreferences } from "@/lib/catalog";
 import { hasSupabaseAdminEnv, hasSupabaseBrowserEnv } from "@/lib/config";
+import { normalizeElevenLabsVoiceIdInput } from "@/lib/elevenlabs/voices";
+import { notifyUserChannels } from "@/lib/delivery/notify-user-channels";
+import { enqueuePipelineJob, getPipelineJobById } from "@/lib/pipeline/jobs";
 import { runDigestPipeline } from "@/lib/pipeline/run-digest-pipeline";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { PersonaId, SummaryDepthId } from "@/lib/types";
 
-/** On-demand digest for the signed-in user (cron вне расписания). */
+/** On-demand digest for the signed-in user (outside scheduled cron). */
 export const maxDuration = 300;
 
-export async function POST() {
+const requestSchema = z.object({
+  redditPostReference: z.string().trim().min(3).optional(),
+  episodeMode: z.enum(["multi", "single_thread"]).optional(),
+  async: z.boolean().optional(),
+});
+
+export async function POST(request: Request) {
   if (!hasSupabaseBrowserEnv()) {
-    return NextResponse.json({ error: "Supabase не настроен." }, { status: 400 });
+    return NextResponse.json({ error: "Supabase is not configured." }, { status: 400 });
   }
 
   if (!hasSupabaseAdminEnv()) {
     return NextResponse.json(
-      { error: "На сервере нет ключа service role — пайплайн не может сохранить дайджест." },
+      { error: "Server is missing the service role key — the pipeline cannot save the digest." },
       { status: 503 },
     );
   }
@@ -27,13 +38,16 @@ export async function POST() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
+
+  const body = requestSchema.safeParse(await request.json().catch(() => ({})));
+  const options = body.success ? body.data : {};
 
   const [prefsRes, profileRes, subsRes] = await Promise.all([
     supabase
       .from("user_preferences")
-      .select("selected_subreddits, voice, summary_depth")
+      .select("selected_subreddits, voice, elevenlabs_voice_id, summary_depth")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase
@@ -49,7 +63,7 @@ export async function POST() {
   ]);
 
   if (prefsRes.error || profileRes.error || subsRes.error) {
-    return NextResponse.json({ error: "Не удалось прочитать настройки." }, { status: 500 });
+    return NextResponse.json({ error: "Could not read settings." }, { status: 500 });
   }
 
   const fromPrefs = prefsRes.data?.selected_subreddits?.filter(Boolean) ?? [];
@@ -60,9 +74,9 @@ export async function POST() {
   const selectedSubreddits =
     fromPrefs.length > 0 ? fromPrefs : legacyOrder.length > 0 ? legacyOrder : defaultSubredditPreferences;
 
-  if (!selectedSubreddits.length) {
+  if (!selectedSubreddits.length && !options.redditPostReference) {
     return NextResponse.json(
-      { error: "Выберите хотя бы один сабреддит в настройках и сохраните профиль." },
+      { error: "Select at least one subreddit in settings or provide a Reddit thread URL." },
       { status: 400 },
     );
   }
@@ -74,14 +88,59 @@ export async function POST() {
       (profileRes.data?.summary_depth as SummaryDepthId)) ??
     "standard";
 
+  const episodeMode =
+    options.episodeMode ?? (options.redditPostReference ? "single_thread" : undefined);
+
+  const pipelinePayload = {
+    selectedSubreddits,
+    persona,
+    summaryDepth,
+    elevenlabsVoiceId: normalizeElevenLabsVoiceIdInput(prefsRes.data?.elevenlabs_voice_id),
+    ownerUserId: user.id,
+    redditPostReference: options.redditPostReference ?? null,
+    episodeMode,
+    maxThreadsPerDigest: episodeMode === "single_thread" ? 1 : undefined,
+  };
+
+  const admin = createAdminSupabaseClient();
+
+  if (options.async) {
+    const job = await enqueuePipelineJob(admin, pipelinePayload);
+    return NextResponse.json({
+      ok: true,
+      queued: true,
+      jobId: job.id,
+      status: job.status,
+    });
+  }
+
   try {
     const result = await runDigestPipeline({
       runDate: new Date(),
       selectedSubreddits,
       persona,
       summaryDepth,
+      elevenlabsVoiceId: normalizeElevenLabsVoiceIdInput(prefsRes.data?.elevenlabs_voice_id),
       ownerUserId: user.id,
+      redditPostReference: options.redditPostReference,
+      episodeMode,
+      maxThreadsPerDigest: episodeMode === "single_thread" ? 1 : undefined,
     });
+
+    const { data: digestRow } = await admin
+      .from("digests")
+      .select("title, slug, summary_text")
+      .eq("id", result.digestId)
+      .maybeSingle();
+
+    const notifyStatus = digestRow
+      ? await notifyUserChannels(user.id, {
+          title: digestRow.title,
+          slug: digestRow.slug,
+          summaryText: digestRow.summary_text ?? "",
+          audioUrl: result.audioUrl,
+        }).catch(() => ({ telegram: "failed" as const }))
+      : null;
 
     return NextResponse.json({
       ok: true,
@@ -91,10 +150,36 @@ export async function POST() {
         slug: result.slug,
         publishedAt: result.publishedAt,
         audioUrl: result.audioUrl,
+        notify: notifyStatus,
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ошибка пайплайна.";
+    const message = error instanceof Error ? error.message : "Pipeline error.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  const jobId = new URL(request.url).searchParams.get("jobId");
+  if (!jobId) {
+    return NextResponse.json({ error: "jobId is required." }, { status: 400 });
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const admin = createAdminSupabaseClient();
+  const job = await getPipelineJobById(admin, jobId, user.id);
+
+  if (!job) {
+    return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true, job });
 }

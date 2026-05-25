@@ -52,10 +52,10 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     baseUrl,
     feedUrl,
     podcastGuid: canonicalPodcastGuidForFeed(feedUrl),
-    podcastTitle: "Reddit Voice Digest — ваш подбор",
-    podcastSubtitle: "Персональные выпуски с вашими сабреддитами",
+    podcastTitle: "Reddit Voice Digest — your lineup",
+    podcastSubtitle: "Personal episodes from your subreddits",
     podcastSummary:
-      "Этот фид синхронизируется только с персональными дайджестами вашего аккаунта — добавьте ссылку в Apple Podcasts или Spotify.",
+      "This feed syncs only with personal digests for your account — add the link in Apple Podcasts or Spotify.",
   });
 
   const xml = await assemblePodcastRssXml(playable, channel);

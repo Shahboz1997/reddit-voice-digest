@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-import { getServerEnv } from "@/lib/config";
+import { getServerEnv, resolveOpenAiScriptModel, resolveOpenAiSummaryModel } from "@/lib/config";
 import { buildDigestScriptPrompt, buildThreadSummaryPrompt } from "@/lib/prompts/digest";
 import type { PersonaId, SummaryDepthId } from "@/lib/types";
 
@@ -52,7 +52,7 @@ export async function summarizeThread(input: {
   const { client, env } = getClient();
 
   const response = await client.responses.create({
-    model: env.OPENAI_MODEL,
+    model: resolveOpenAiSummaryModel(env),
     input: [
       {
         role: "user",
@@ -93,7 +93,7 @@ export async function generateDigestScript(input: {
   const { client, env } = getClient();
 
   const response = await client.responses.create({
-    model: env.OPENAI_MODEL,
+    model: resolveOpenAiScriptModel(env),
     input: [
       {
         role: "user",

@@ -1,19 +1,31 @@
+import {
+  resolveElevenLabsVoiceId,
+  resolveElevenLabsVoiceProfile,
+} from "@/lib/elevenlabs/voices";
 import type { PersonaId, SummaryDepthId } from "@/lib/types";
+
+export {
+  defaultElevenLabsVoiceIdForPersona,
+  ELEVENLABS_VOICE_CATALOG,
+  isKnownElevenLabsVoiceId,
+  resolveElevenLabsVoiceId,
+  resolveElevenLabsVoiceProfile,
+} from "@/lib/elevenlabs/voices";
 
 export const PERSONAS: readonly { id: PersonaId; label: string; hint: string }[] = [
   {
     id: "bro_investor",
-    label: "Бро-инвестор",
+    label: "Bro investor",
     hint: "Fast, bold pace and punchy asides.",
   },
   {
     id: "scholar",
-    label: "Ученый-исследователь",
+    label: "Scholar",
     hint: "Calm, precise, exploratory tone.",
   },
   {
     id: "news_anchor",
-    label: "Новостной диктор",
+    label: "News anchor",
     hint: "Formal, neutral broadcast style.",
   },
 ] as const;
@@ -61,6 +73,26 @@ export function personaOpenAiTtsVoice(persona: PersonaId): string {
     default:
       return "alloy";
   }
+}
+
+export function personaElevenLabsProfile(persona: PersonaId) {
+  return resolveElevenLabsVoiceProfile(persona, null);
+}
+
+export function personaElevenLabsVoice(persona: PersonaId): string {
+  return resolveElevenLabsVoiceId(persona, null);
+}
+
+export function personaTtsVoice(
+  persona: PersonaId,
+  provider: "openai" | "elevenlabs" | "assemblyai",
+  elevenlabsVoiceOverride?: string | null,
+): string {
+  if (provider === "elevenlabs") {
+    return resolveElevenLabsVoiceId(persona, elevenlabsVoiceOverride);
+  }
+
+  return personaOpenAiTtsVoice(persona);
 }
 
 export function depthCommentSampleCount(depth: SummaryDepthId): number {

@@ -71,5 +71,8 @@ export interface UserDigestPreferences {
   summaryDepth: SummaryDepthId;
   deliveryLocalTime: string | null;
   deliveryWeekdaysOnly: boolean;
+  timezone?: string;
+  /** null = ElevenLabs voice follows persona default from catalog */
+  elevenlabsVoiceId?: string | null;
   personalRssUrl?: string | null;
 }
