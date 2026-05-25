@@ -13,6 +13,6 @@ See `.env.example` for all variables. Health: `GET /api/health`.
 
 ## Production
 
-Deploy to Vercel with `CRON_SECRET` set. Crons: daily pipeline (07:00 UTC), delivery every 10 min.
+Deploy to Vercel with `CRON_SECRET` set. On **Vercel Hobby**, only daily crons are allowed (`vercel.json` ships one: pipeline at 07:00 UTC). For delivery/job ticks every 5–10 minutes, use **Vercel Pro** or an external cron service that calls your API routes with the secret.
 
 Do not use `prisma db pull`. Update `prisma/schema.prisma` after SQL migrations.
