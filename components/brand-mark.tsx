@@ -28,7 +28,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
         <p className="font-display text-xs font-black uppercase tracking-[0.32em] text-[var(--radio-pink)]">
           Reddit Voice Digest
         </p>
-        <p className="mt-0.5 font-display text-[11px] font-bold uppercase tracking-[0.22em] text-white/45">
+        <p className="mt-0.5 font-display text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--app-text-muted)]">
           Dance radio for reddit threads
         </p>
       </div>

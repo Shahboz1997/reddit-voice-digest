@@ -9,9 +9,10 @@ import {
   PERSONAS,
   SUMMARY_DEPTHS,
 } from "@/lib/digest-persona";
+import { SubredditPriorityQueue } from "@/components/subreddit-priority-queue";
 import { SubredditStationGrid } from "@/components/subreddit-station-grid";
+import { createToast, Toast, type ToastMessage } from "@/components/toast";
 import { COMMON_TIMEZONES } from "@/lib/delivery/timezone-options";
-import { getSubredditStation } from "@/lib/subreddit-stations";
 import type {
   NotificationPreference,
   PersonaId,
@@ -72,6 +73,7 @@ export function SettingsForm({
   const [deliveryStatusLine, setDeliveryStatusLine] = useState<string | null>(null);
   const [lastDeliveryDigestSlug, setLastDeliveryDigestSlug] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const loadDeliveryStatus = useCallback(async () => {
     try {
@@ -198,7 +200,7 @@ export function SettingsForm({
   }, [notifications]);
 
   const catalogSorted = useMemo(() => {
-    return [...availableSources].sort((a, b) => a.subreddit_name.localeCompare(b.subreddit_name));
+    return [...availableSources].sort((a, b) => b.priority - a.priority);
   }, [availableSources]);
 
   const personaDefaultVoiceId = useMemo(
@@ -365,110 +367,72 @@ export function SettingsForm({
         if (typeof data.userApiRssUrl === "string" && data.userApiRssUrl) {
           setUserApiRssUrl(data.userApiRssUrl);
         }
-        setStatus("Saved to Supabase and locally.");
+        setStatus("Synced with your account.");
+        setToast(createToast("Saved", "success"));
         void loadDeliveryStatus();
       } else if (response.status === 401) {
-        setStatus(
-          "Saved locally. After signing in with Supabase, sync will push your profile to the server and issue a personal RSS feed.",
-        );
+        setStatus("Stored on this device. Sign in to sync to the cloud.");
+        setToast(createToast("Saved locally", "success"));
       } else {
-        setStatus("Saved locally. Remote settings returned an error.");
+        setStatus("Stored on this device. Server sync failed — try again later.");
+        setToast(createToast("Saved locally", "info"));
       }
     } catch {
-      setStatus("Saved locally. Check your network and try again.");
+      setStatus("Stored on this device. Check your connection.");
+      setToast(createToast("Saved locally", "info"));
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[1.3fr_0.9fr]">
-      <section className="radio-glass rounded-2xl p-6">
-        <p className="font-display text-sm font-bold uppercase tracking-[0.28em] text-[var(--radio-pink)]">
-          Personalization
-        </p>
-        <h1 className="mt-3 font-display text-3xl font-bold uppercase tracking-tight text-white">
-          Communities & priority
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-          Tap a subreddit tile to select it. Drag selected items below to set podcast priority — higher in the list means higher priority. Voice, summary depth, and more are below.
-        </p>
-
-        <div className="mt-6 border-b border-white/10 pb-6">
-          <p className="font-display text-xs font-bold uppercase tracking-[0.28em] text-white/50">Stations</p>
-          <p className="mt-1 text-sm text-white/55">
-            Radio Record–style tiles — tap to add or remove a subreddit.
+    <>
+    <Toast onDismiss={() => setToast(null)} toast={toast} />
+    <div className="app-ui grid gap-6 xl:grid-cols-[1fr_380px]">
+      <div className="min-w-0 space-y-6">
+        <section className="spotify-panel px-5 py-6 sm:px-8 sm:py-8">
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--app-text)] sm:text-4xl">Your library</h1>
+          <p className="mt-2 max-w-2xl text-sm text-[var(--app-text-muted)]">
+            Pick Reddit communities for your daily mix. Reorder the queue to control which topics lead each episode.
           </p>
-          <div className="mt-4">
+
+          <div className="mt-8">
             <SubredditStationGrid
               onToggle={toggleSubreddit}
               selected={subreddits}
               sources={catalogSorted}
             />
           </div>
-        </div>
 
-        <div className="mt-5 space-y-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Priority (drag & drop)</p>
-          {subreddits.length === 0 ? (
-            <p className="text-sm text-slate-400">Add at least one subreddit above.</p>
-          ) : (
-            subreddits.map((name, index) => {
-              const { Icon, label } = getSubredditStation(name);
+          <p className="sticky bottom-[calc(var(--mobile-nav-height)+0.75rem)] z-10 mt-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-center text-sm font-semibold text-[var(--app-text)] shadow-lg sm:static sm:mt-6 sm:shadow-none">
+            {subreddits.length} station{subreddits.length === 1 ? "" : "s"} selected
+          </p>
+        </section>
 
-              return (
-                <div
-                  key={name}
-                  className="flex cursor-grab items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#181818] px-4 py-3 active:cursor-grabbing"
-                  draggable
-                  onDragEnd={() => setDragIndex(null)}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDragStart={() => setDragIndex(index)}
-                  onDrop={() => {
-                    if (dragIndex === null || dragIndex === index) return;
-                    moveSubreddit(dragIndex, index);
-                    setDragIndex(null);
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0d0d0d]">
-                      <Icon className="h-5 w-5 text-white/80" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--radio-pink)]">
-                        #{index + 1}
-                      </p>
-                      <p className="mt-0.5 truncate font-display text-sm font-bold uppercase text-white">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-white/45">
-                        r/{name} · score {availableSources.find((s) => s.subreddit_name === name)?.priority ?? "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs text-white/70 hover:border-[var(--radio-pink)]/40 hover:text-white"
-                    onClick={() => removeSubreddit(name)}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
+        <section className="spotify-panel px-5 py-5 sm:px-8">
+          <h2 className="text-xl font-bold text-[var(--app-text)]">Queue</h2>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">Top = highest priority in the digest.</p>
+          <div className="mt-4">
+            <SubredditPriorityQueue
+              dragIndex={dragIndex}
+              onDragIndexChange={setDragIndex}
+              onMove={moveSubreddit}
+              onRemove={removeSubreddit}
+              subreddits={subreddits}
+            />
+          </div>
+        </section>
 
-        <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5">
-          <p className="text-sm uppercase tracking-[0.22em] text-cyan-300">Voice & vibe</p>
+        <section className="spotify-panel px-5 py-5 sm:px-8">
+          <h2 className="text-xl font-bold text-[var(--app-text)]">Voice & summary</h2>
           <div className="mt-4 space-y-3">
             {PERSONAS.map((row) => (
               <label
                 key={row.id}
-                className={`flex cursor-pointer flex-col rounded-2xl border px-4 py-3 text-left transition ${
-                  persona === row.id ? "border-cyan-400/50 bg-white/10" : "border-white/10 hover:border-white/20"
+                className={`flex cursor-pointer flex-col rounded-md border px-4 py-3 text-left transition ${
+                  persona === row.id
+                    ? "border-[var(--spotify-green)]/60 bg-[var(--spotify-highlight)]"
+                    : "border-transparent bg-[var(--spotify-elevated)] hover:bg-[var(--app-surface-elevated)]"
                 }`}
               >
                 <span className="flex items-start gap-3">
@@ -480,9 +444,9 @@ export function SettingsForm({
                     type="radio"
                   />
                   <span>
-                    <span className="text-sm font-medium text-white">{row.label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-400">{row.hint}</span>
-                    <span className="mt-1 block text-[11px] text-slate-500">
+                    <span className="text-sm font-medium text-[var(--app-text)]">{row.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{row.hint}</span>
+                    <span className="mt-1 block text-[11px] text-[var(--app-text-muted)]">
                       Changes OpenAI instructions for summary/script and TTS voice (ElevenLabs or OpenAI — see AUDIO_PROVIDER).
                     </span>
                   </span>
@@ -491,19 +455,19 @@ export function SettingsForm({
             ))}
           </div>
 
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">ElevenLabs voice</p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
+          <div className="mt-8 border-t border-[var(--app-border)] pt-6">
+            <p className="mt-2 text-sm font-semibold text-[var(--app-text)]">Narrator (ElevenLabs)</p>
+            <p className="mt-2 text-xs leading-5 text-[var(--app-text-muted)]">
               When AUDIO_PROVIDER=elevenlabs, controls narration. Auto picks a voice for your persona (currently:{" "}
               {ELEVENLABS_VOICE_CATALOG.find((v) => v.id === personaDefaultVoiceId)?.name ?? "—"}).
             </p>
 
             <div className="mt-4 space-y-2">
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                className={`flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 transition ${
                   !elevenlabsVoiceId && !customVoiceActive
-                    ? "border-cyan-400/50 bg-white/10"
-                    : "border-white/10 hover:border-white/20"
+                    ? "border-[var(--spotify-green)]/60 bg-[var(--spotify-highlight)]"
+                    : "border-transparent bg-[var(--spotify-elevated)] hover:bg-[var(--app-surface-elevated)]"
                 }`}
               >
                 <input
@@ -518,8 +482,8 @@ export function SettingsForm({
                   type="radio"
                 />
                 <span>
-                  <span className="text-sm font-medium text-white">Auto (by persona)</span>
-                  <span className="mt-1 block text-xs text-slate-400">
+                  <span className="text-sm font-medium text-[var(--app-text)]">Auto (by persona)</span>
+                  <span className="mt-1 block text-xs text-[var(--app-text-muted)]">
                     Recommended — updates with the voice & vibe selection above.
                   </span>
                 </span>
@@ -532,8 +496,10 @@ export function SettingsForm({
                 return (
                   <label
                     key={voice.id}
-                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
-                      selected ? "border-cyan-400/50 bg-white/10" : "border-white/10 hover:border-white/20"
+                    className={`flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 transition ${
+                      selected
+                        ? "border-[var(--spotify-green)]/60 bg-[var(--spotify-highlight)]"
+                        : "border-transparent bg-[var(--spotify-elevated)] hover:bg-[var(--app-surface-elevated)]"
                     }`}
                   >
                     <input
@@ -549,24 +515,24 @@ export function SettingsForm({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-white">{voice.name}</span>
+                        <span className="text-sm font-medium text-[var(--app-text)]">{voice.name}</span>
                         {recommended ? (
-                          <span className="rounded-full bg-cyan-400/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-cyan-200">
+                          <span className="rounded-full bg-[var(--spotify-green)]/20 px-2 py-0.5 text-[10px] font-medium text-[var(--spotify-green)]">
                             for persona
                           </span>
                         ) : null}
                       </span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-400">{voice.hint}</span>
+                      <span className="mt-1 block text-xs leading-5 text-[var(--app-text-muted)]">{voice.hint}</span>
                     </span>
                   </label>
                 );
               })}
 
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                className={`flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 transition ${
                   customVoiceActive || showCustomVoice
-                    ? "border-cyan-400/50 bg-white/10"
-                    : "border-white/10 hover:border-white/20"
+                    ? "border-[var(--spotify-green)]/60 bg-[var(--spotify-highlight)]"
+                    : "border-transparent bg-[var(--spotify-elevated)] hover:bg-[var(--app-surface-elevated)]"
                 }`}
               >
                 <input
@@ -577,13 +543,13 @@ export function SettingsForm({
                   type="radio"
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="text-sm font-medium text-white">Custom voice ID</span>
-                  <span className="mt-1 block text-xs text-slate-400">
+                  <span className="text-sm font-medium text-[var(--app-text)]">Custom voice ID</span>
+                  <span className="mt-1 block text-xs text-[var(--app-text-muted)]">
                     From ElevenLabs → Voices → copy a clone or premade voice ID.
                   </span>
                   {showCustomVoice || customVoiceActive ? (
                     <input
-                      className="mt-3 w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 font-mono text-xs text-white placeholder:text-slate-600"
+                      className="mt-3 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 font-mono text-xs text-[var(--app-text)] placeholder:text-[var(--app-text-muted)]"
                       onChange={(event) => setCustomVoiceDraft(event.target.value)}
                       placeholder="e.g. pNInz6obpgDQGcFmaJgB"
                       spellCheck={false}
@@ -595,10 +561,10 @@ export function SettingsForm({
             </div>
           </div>
 
-          <p className="mt-8 text-xs uppercase tracking-[0.22em] text-slate-400">Summary depth</p>
+          <p className="mt-8 text-sm font-semibold text-[var(--app-text)]">Summary depth</p>
           <div className="mt-4">
             <input
-              className="w-full accent-cyan-400"
+              className="w-full accent-[var(--spotify-green)]"
               max={SUMMARY_DEPTHS.length - 1}
               min={0}
               onChange={(e) => setSummaryDepth(SUMMARY_DEPTHS[Number(e.target.value)].id)}
@@ -606,11 +572,11 @@ export function SettingsForm({
               type="range"
               value={depthIndex(summaryDepth)}
             />
-            <div className="mt-2 flex justify-between gap-3 text-[11px] text-slate-400">
+            <div className="mt-2 flex justify-between gap-3 text-[11px] text-[var(--app-text-muted)]">
               {SUMMARY_DEPTHS.map((row) => (
                 <span
                   key={row.id}
-                  className={summaryDepth === row.id ? "text-cyan-200" : undefined}
+                  className={summaryDepth === row.id ? "font-semibold text-[var(--spotify-green)]" : undefined}
                   style={{ flex: "1 1 0" }}
                 >
                   {row.label}
@@ -618,34 +584,34 @@ export function SettingsForm({
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
-      <div className="space-y-6">
-        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-          <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Delivery</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white">Notifications & feeds</h2>
+      <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+        <section className="spotify-panel p-5">
+          <h2 className="text-lg font-bold text-[var(--app-text)]">Delivery</h2>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">RSS, schedule, and notifications.</p>
 
-          <div className="mt-6 rounded-3xl border border-white/15 bg-slate-950/50 p-4">
-            <p className="text-sm font-medium text-white">Scheduled delivery</p>
-            <p className="mt-2 text-sm text-slate-400">
+          <div className="mt-5 rounded-md bg-[var(--spotify-elevated)] p-4">
+            <p className="text-sm font-medium text-[var(--app-text)]">Scheduled delivery</p>
+            <p className="mt-2 text-sm text-[var(--app-text-muted)]">
               When you enable a channel below and connect a worker/cron to these fields, the digest can be delivered daily at your chosen time.
             </p>
-            <label className="mt-4 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="delivery-time">
+            <label className="mt-4 block text-xs font-medium text-[var(--app-text-muted)]" htmlFor="delivery-time">
               Local time
             </label>
             <input
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+              className="mt-2 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
               id="delivery-time"
               onChange={(event) => setDeliveryLocalTime(event.target.value)}
               type="time"
               value={deliveryLocalTime}
             />
-            <label className="mt-4 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="delivery-timezone">
+            <label className="mt-4 block text-xs font-medium text-[var(--app-text-muted)]" htmlFor="delivery-timezone">
               Timezone
             </label>
             <select
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+              className="mt-2 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
               id="delivery-timezone"
               onChange={(event) => setTimezone(event.target.value)}
               value={timezone}
@@ -657,11 +623,11 @@ export function SettingsForm({
               ))}
             </select>
             {deliveryStatusLine ? (
-              <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm leading-6 text-slate-200">
+              <div className="mt-4 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm leading-6 text-[var(--app-text)]">
                 <p>{deliveryStatusLine}</p>
                 {lastDeliveryDigestSlug ? (
                   <a
-                    className="mt-2 inline-block text-cyan-300 underline-offset-2 hover:underline"
+                    className="mt-2 inline-block text-[var(--spotify-green)] underline-offset-2 hover:underline"
                     href={`/digest/${lastDeliveryDigestSlug}`}
                   >
                     Open last episode
@@ -669,13 +635,13 @@ export function SettingsForm({
                 ) : null}
               </div>
             ) : null}
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-[var(--app-text-muted)]">
               On Vercel, cron runs every 10 minutes via vercel.json. Set CRON_SECRET (same as PIPELINE_CRON_SECRET).
             </p>
-            <label className="mt-4 flex items-center gap-3 text-sm text-slate-200">
+            <label className="mt-4 flex items-center gap-3 text-sm text-[var(--app-text)]">
               <input
                 checked={deliveryWeekdaysOnly}
-                className="h-4 w-4 rounded accent-cyan-400"
+                className="h-4 w-4 rounded accent-[var(--spotify-green)]"
                 onChange={(event) => setDeliveryWeekdaysOnly(event.target.checked)}
                 type="checkbox"
               />
@@ -685,16 +651,16 @@ export function SettingsForm({
 
           <div className="mt-6 space-y-4">
             {notifications.map((item) => (
-              <div key={item.channelType} className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+              <div key={item.channelType} className="rounded-md bg-[var(--spotify-elevated)] p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-white">{item.label}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">{item.helperText}</p>
+                    <p className="text-sm font-medium text-[var(--app-text)]">{item.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--app-text-muted)]">{item.helperText}</p>
                   </div>
 
                   <button
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      item.isEnabled ? "bg-cyan-400 text-slate-950" : "bg-white/10 text-slate-300"
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      item.isEnabled ? "bg-[var(--accent-primary)] text-[var(--accent-on-primary)]" : "bg-[var(--app-chip-bg)] text-[var(--app-text-muted)]"
                     }`}
                     onClick={() => toggleNotification(item.channelType)}
                     type="button"
@@ -705,23 +671,23 @@ export function SettingsForm({
 
                 {item.channelType === "telegram" ? (
                   <input
-                    className="mt-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-300/40"
+                    className="mt-4 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none placeholder:text-[var(--app-text-muted)] focus:ring-2 focus:ring-[var(--accent-primary)]"
                     onChange={(event) => updateNotificationTarget(item.channelType, event.target.value)}
                     placeholder="@your_telegram_handle or chat id"
                     type="text"
                     value={item.targetValue ?? ""}
                   />
                 ) : (
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Podcast RSS</p>
-                    <p className="mt-2 text-xs text-slate-500">Private link (token — preferred for players)</p>
-                    <p className="mt-1 break-all text-cyan-100">{displayRssUrl}</p>
-                    <p className="mt-3 text-xs text-slate-500">Feed by account ID (dynamic API)</p>
-                    <p className="mt-1 break-all font-mono text-[13px] text-cyan-200/90">
+                  <div className="mt-4 rounded-md bg-[var(--app-surface-elevated)] px-3 py-3 text-sm leading-6">
+                    <p className="text-xs font-medium text-[var(--app-text-muted)]">Podcast RSS</p>
+                    <p className="mt-2 text-xs text-[var(--app-text-muted)]">Private link (token — preferred for players)</p>
+                    <p className="mt-1 break-all text-[var(--spotify-green)]">{displayRssUrl}</p>
+                    <p className="mt-3 text-xs text-[var(--app-text-muted)]">Feed by account ID (dynamic API)</p>
+                    <p className="mt-1 break-all font-mono text-[13px] text-[var(--app-text)]">
                       {userApiRssUrl ?? "Available after sign-in and loading settings from the server."}
                     </p>
-                    <p className="mt-3 text-xs text-slate-500">
-                      Public guest link: <span className="break-all text-slate-400">{rssUrl}</span>. Personal URLs below are enabled after sign-in and clicking Save preferences.
+                    <p className="mt-3 text-xs text-[var(--app-text-muted)]">
+                      Public guest link: <span className="break-all text-[var(--app-text-muted)]">{rssUrl}</span>. Personal URLs below are enabled after sign-in and clicking Save preferences.
                     </p>
                   </div>
                 )}
@@ -730,26 +696,26 @@ export function SettingsForm({
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-          <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Generation</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white">On-demand digest</h2>
+        <section className="spotify-panel p-5">
+          <h2 className="text-lg font-bold text-[var(--app-text)]">Generate now</h2>
+          <p className="mt-1 text-sm text-[var(--app-text-muted)]">One-off episode from your queue or a single thread.</p>
 
-          <label className="mt-6 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="reddit-thread-url">
+          <label className="mt-5 block text-xs font-medium text-[var(--app-text-muted)]" htmlFor="reddit-thread-url">
             Optional Reddit thread URL or post id
           </label>
           <input
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
+            className="mt-2 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
             id="reddit-thread-url"
             onChange={(event) => setRedditPostReference(event.target.value)}
             placeholder="https://www.reddit.com/r/productivity/comments/..."
             value={redditPostReference}
           />
 
-          <label className="mt-5 block text-xs uppercase tracking-[0.2em] text-slate-500" htmlFor="episode-mode">
+          <label className="mt-4 block text-xs font-medium text-[var(--app-text-muted)]" htmlFor="episode-mode">
             Episode mode
           </label>
           <select
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
+            className="mt-2 w-full rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
             disabled={Boolean(redditPostReference.trim())}
             id="episode-mode"
             onChange={(event) => setEpisodeMode(event.target.value as "multi" | "single_thread")}
@@ -759,10 +725,10 @@ export function SettingsForm({
             <option value="single_thread">Single-thread episode (~5 min focus)</option>
           </select>
 
-          <label className="mt-5 flex items-center gap-3 text-sm text-slate-300">
+          <label className="mt-5 flex items-center gap-3 text-sm text-[var(--app-text-muted)]">
             <input
               checked={queueInBackground}
-              className="h-4 w-4 rounded border-white/20 bg-slate-900 accent-cyan-400"
+              className="h-4 w-4 rounded accent-[var(--spotify-green)]"
               onChange={(event) => setQueueInBackground(event.target.checked)}
               type="checkbox"
             />
@@ -770,23 +736,24 @@ export function SettingsForm({
           </label>
         </section>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-          <p className="text-sm uppercase tracking-[0.24em] text-cyan-300">Status</p>
-          <p className="mt-3 text-sm leading-7 text-slate-300">{status}</p>
+        <section className="spotify-panel sticky bottom-4 z-20 border-[var(--accent-primary)]/20 p-5 shadow-2xl xl:static xl:shadow-none">
+          <p className="text-sm leading-6 text-[var(--app-text-muted)]" role="status">
+            {status}
+          </p>
 
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-col gap-2">
             <button
-              className="inline-flex rounded-full bg-cyan-400 px-5 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex w-full justify-center rounded-full bg-[var(--accent-primary)] px-5 py-3 text-sm font-bold text-[var(--accent-on-primary)] transition hover:scale-[1.02] hover:bg-[var(--accent-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSaving}
               onClick={() => {
                 void handleSave();
               }}
               type="button"
             >
-              {isSaving ? "Saving..." : "Save preferences"}
+              {isSaving ? "Saving…" : "Save preferences"}
             </button>
             <button
-              className="inline-flex rounded-full border border-amber-400/50 bg-amber-400/10 px-5 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-300/80 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full justify-center rounded-full border border-[var(--app-border)] bg-transparent px-5 py-3 text-sm font-bold text-[var(--app-text)] transition hover:border-[var(--accent-primary)]/40 hover:bg-[var(--app-chip-bg)] disabled:cursor-not-allowed disabled:opacity-40"
               disabled={onDemandBusy || isSaving || (subreddits.length === 0 && !redditPostReference.trim())}
               onClick={() => {
                 void handleOnDemandDigest();
@@ -801,22 +768,23 @@ export function SettingsForm({
               {onDemandBusy ? "Generating…" : "Generate on demand"}
             </button>
             {hasTelegramEnabled ? (
-              <p className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100">
+              <p className="rounded-md border border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-3 py-2 text-xs text-[var(--app-text-muted)]">
                 Telegram enabled — set TELEGRAM_BOT_TOKEN on the server and your chat id above; cron calls /api/delivery/process-due.
               </p>
             ) : null}
           </div>
-          <p className="mt-3 text-xs leading-5 text-slate-500">
+          <p className="mt-3 text-xs leading-5 text-[var(--app-text-muted)]">
             On-demand uses subreddits, voice, and depth saved in Supabase (click Save if you have not yet).
             On hosts with short timeouts the request may fail — check server logs or run the pipeline from the CLI.
           </p>
           {onDemandMessage ? (
-            <p className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
+            <p className="mt-3 rounded-md border border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-3 py-3 text-sm text-[var(--app-text)]">
               {onDemandMessage}
             </p>
           ) : null}
         </section>
-      </div>
+      </aside>
     </div>
+    </>
   );
 }

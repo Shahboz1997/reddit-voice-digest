@@ -1,5 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
+
+import { SubredditArt } from "@/components/subreddit-art";
+import { groupSourcesByCategory } from "@/lib/subreddit-categories";
 import { getSubredditStation } from "@/lib/subreddit-stations";
 import type { SourceSeed } from "@/lib/types";
 
@@ -9,50 +13,69 @@ interface SubredditStationGridProps {
   onToggle: (subredditName: string) => void;
 }
 
-export function SubredditStationGrid({ sources, selected, onToggle }: SubredditStationGridProps) {
+function CheckIcon() {
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
-      {sources.map((source) => {
-        const name = source.subreddit_name;
-        const isSelected = selected.includes(name);
-        const { label, Icon } = getSubredditStation(name);
+    <svg aria-hidden className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+    </svg>
+  );
+}
 
-        return (
-          <button
-            key={name}
-            aria-label={`${isSelected ? "Remove" : "Add"} r/${name}`}
-            aria-pressed={isSelected}
-            className={`station-tile group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl p-2 transition ${
-              isSelected
-                ? "station-tile--active bg-[#2a2a2a] ring-2 ring-[var(--radio-pink)]"
-                : "bg-[#181818] hover:bg-[#222222]"
-            }`}
-            onClick={() => onToggle(name)}
-            title={`r/${name}`}
-            type="button"
-          >
-            {isSelected ? (
-              <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--radio-pink)] text-[9px] font-black text-black">
-                ✓
-              </span>
-            ) : null}
+export function SubredditStationGrid({ sources, selected, onToggle }: SubredditStationGridProps) {
+  const rows = useMemo(() => groupSourcesByCategory(sources), [sources]);
 
-            <Icon
-              className={`h-9 w-9 shrink-0 transition ${
-                isSelected ? "text-white" : "text-white/75 group-hover:text-white"
-              }`}
-            />
+  return (
+    <div className="space-y-10">
+      {rows.map(({ category, sources: rowSources }) => (
+        <section key={category.id}>
+          <h3 className="text-xl font-bold tracking-tight text-[var(--app-text)] sm:text-2xl">{category.title}</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:flex sm:gap-4 sm:overflow-x-auto sm:pb-3 spotify-row-scroll">
+            {rowSources.map((source) => {
+              const name = source.subreddit_name;
+              const isSelected = selected.includes(name);
+              const { label } = getSubredditStation(name);
 
-            <span
-              className={`line-clamp-2 w-full px-0.5 text-center font-display text-[10px] font-bold leading-tight uppercase tracking-wide ${
-                isSelected ? "text-white" : "text-white/65 group-hover:text-white/90"
-              }`}
-            >
-              {label}
-            </span>
-          </button>
-        );
-      })}
+              return (
+                <button
+                  key={name}
+                  aria-label={`${isSelected ? "Remove" : "Add"} r/${name}`}
+                  aria-pressed={isSelected}
+                  className={`spotify-station-card group relative h-[140px] w-full overflow-hidden rounded-md text-left transition hover:scale-[1.02] active:scale-[0.98] sm:h-[220px] sm:w-[180px] sm:shrink-0 ${
+                    isSelected ? "ring-2 ring-[var(--spotify-green)] ring-offset-2 ring-offset-[var(--app-bg)]" : ""
+                  }`}
+                  onClick={() => onToggle(name)}
+                  style={{ backgroundColor: category.color }}
+                  title={`r/${name}`}
+                  type="button"
+                >
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute -right-3 top-5 rotate-[22deg] shadow-[0_12px_28px_rgba(0,0,0,0.45)] transition group-hover:rotate-[18deg]"
+                  >
+                    <SubredditArt className="!h-[104px] !w-[104px] !rounded-md" size="lg" subredditName={name} />
+                  </div>
+
+                  <p className="absolute right-4 bottom-4 left-4 line-clamp-3 text-lg font-bold leading-snug text-white drop-shadow-sm">
+                    {label}
+                  </p>
+
+                  <p className="absolute top-3 left-3 text-[11px] font-medium text-white/70">r/{name}</p>
+
+                  {isSelected ? (
+                    <span className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--spotify-green)] text-black shadow-md">
+                      <CheckIcon />
+                    </span>
+                  ) : (
+                    <span className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/25 text-white/0 opacity-0 ring-1 ring-white/20 transition group-hover:bg-black/40 group-hover:text-white/90 group-hover:opacity-100">
+                      +
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

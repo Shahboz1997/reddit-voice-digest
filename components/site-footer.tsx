@@ -108,7 +108,7 @@ export function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="site-footer mt-auto border-t border-white/[0.08] bg-[#0a0a0a]">
+    <footer className="site-footer app-ui mt-auto border-t border-[var(--app-border)] bg-[var(--app-surface)]">
       <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
           {footerColumns.map((column, columnIndex) => (

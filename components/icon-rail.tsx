@@ -12,7 +12,7 @@ interface IconRailProps {
 
 const navItems = [
   { href: "/", label: "Home", Icon: IconHome, match: (path: string) => path === "/" },
-  { href: "/#archive", label: "Archive", Icon: IconLibrary, match: (path: string) => path === "/" },
+  { href: "/archive", label: "Archive", Icon: IconLibrary, match: (path: string) => path.startsWith("/archive") },
   { href: "/settings", label: "Settings", Icon: IconSettings, match: (path: string) => path.startsWith("/settings") },
 ] as const;
 
