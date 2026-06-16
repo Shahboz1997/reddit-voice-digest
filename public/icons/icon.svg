@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Reddit Voice Digest">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2d92"/>
+      <stop offset="100%" stop-color="#ffd600"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="180" fill="url(#g)" opacity="0.25"/>
+  <path fill="#fff" d="M176 168h160c17.7 0 32 14.3 32 32v48c0 53-43 96-96 96s-96-43-96-96v-48c0-17.7 14.3-32 32-32zm80 176c35.3 0 64-28.7 64-64h-32c0 17.7-14.3 32-32 32s-32-14.3-32-32h-32c0 35.3 28.7 64 64 64z"/>
+  <path fill="#1db954" d="M320 312h64l24 56h-48l-12-28-12 28h-48l24-56z"/>
+</svg>

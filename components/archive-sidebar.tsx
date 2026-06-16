@@ -11,6 +11,8 @@ interface ArchiveSidebarProps {
   episodes: DigestEpisode[];
   rssUrl: string;
   variant?: "default" | "radio" | "spotify";
+  /** Highlights the episode currently on the home player or digest page. */
+  activeEpisodeId?: string;
 }
 
 function formatShortDate(value: string) {
@@ -20,7 +22,12 @@ function formatShortDate(value: string) {
   });
 }
 
-export function ArchiveSidebar({ episodes, rssUrl, variant = "default" }: ArchiveSidebarProps) {
+export function ArchiveSidebar({
+  episodes,
+  rssUrl,
+  variant = "default",
+  activeEpisodeId,
+}: ArchiveSidebarProps) {
   const isRadio = variant === "radio" || variant === "spotify";
   const isSpotify = variant === "spotify";
   const [query, setQuery] = useState("");
@@ -48,9 +55,9 @@ export function ArchiveSidebar({ episodes, rssUrl, variant = "default" }: Archiv
   }, [episodes, query]);
 
   return (
-    <aside className="space-y-6">
+    <aside className="space-y-6" id="archive">
       <section
-        className={`rounded-2xl p-5 ${isRadio ? "radio-glass" : "rounded-[2rem] border border-white/10 bg-white/5"}`}
+        className={`p-5 ${isSpotify ? "spotify-panel" : isRadio ? "radio-glass rounded-2xl" : "rounded-[2rem] border border-white/10 bg-white/5"}`}
       >
         <div className="flex items-center gap-2">
           <IconSearch className={`h-5 w-5 ${isRadio ? "text-[var(--radio-yellow)]" : "text-cyan-300"}`} />
@@ -59,35 +66,79 @@ export function ArchiveSidebar({ episodes, rssUrl, variant = "default" }: Archiv
           </h2>
         </div>
 
-        <input
-          aria-label="Search episodes"
-          className={`mt-4 w-full rounded-xl border border-white/10 py-2.5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-white/30 ${isRadio ? "bg-black/60 focus:border-[var(--radio-pink)]/50" : "rounded-2xl bg-slate-950/70 focus:border-cyan-300/40"}`}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={isSpotify ? "Search…" : "Search topics or keywords"}
-          type="search"
-          value={query}
-        />
-
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          {episodes.map((episode) => (
-            <Link
-              key={episode.id}
-              className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-center transition hover:border-cyan-300/30 hover:bg-white/10"
-              href={`/digest/${episode.slug}`}
-            >
-              <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">
-                {formatDigestDate(episode.publishedAt, { weekday: "short" })}
-              </p>
-              <p className="mt-1 text-sm font-medium text-white">{formatShortDate(episode.publishedAt)}</p>
-            </Link>
-          ))}
+        <div className="relative mt-4">
+          <IconSearch
+            aria-hidden
+            className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isSpotify ? "text-white/35" : "text-white/40"}`}
+          />
+          <input
+            aria-label="Search episodes"
+            className={`w-full py-2.5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-white/30 ${
+              isSpotify
+                ? "rounded-md border-0 bg-[#2a2a2a] focus:ring-2 focus:ring-[var(--spotify-green)]"
+                : isRadio
+                  ? "rounded-xl border border-white/10 bg-black/60 focus:border-[var(--radio-pink)]/50"
+                  : "rounded-2xl border border-white/10 bg-slate-950/70 focus:border-cyan-300/40"
+            }`}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={isSpotify ? "Search episodes…" : "Search topics or keywords"}
+            type="search"
+            value={query}
+          />
         </div>
 
+        {episodes.length > 1 ? (
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            {episodes.slice(0, 6).map((episode) => {
+              const isActive = episode.id === activeEpisodeId;
+
+              return (
+                <Link
+                  key={episode.id}
+                  className={`rounded-md px-2 py-2.5 text-center transition ${
+                    isSpotify
+                      ? isActive
+                        ? "bg-[var(--spotify-green)]/20 ring-1 ring-[var(--spotify-green)]/60"
+                        : "bg-[var(--spotify-elevated)] hover:bg-[#2a2a2a]"
+                      : isActive
+                        ? "border border-cyan-300/40 bg-cyan-400/10"
+                        : "rounded-2xl border border-white/10 bg-slate-950/60 hover:border-cyan-300/30 hover:bg-white/10"
+                  }`}
+                  href={`/digest/${episode.slug}`}
+                >
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-wider ${isSpotify ? "text-white/45" : "text-cyan-300"}`}
+                  >
+                    {formatDigestDate(episode.publishedAt, { weekday: "short" })}
+                  </p>
+                  <p className="mt-0.5 text-xs font-semibold text-white">{formatShortDate(episode.publishedAt)}</p>
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="mt-5 space-y-3">
-          {filtered.map((episode) => (
+          {filtered.length === 0 ? (
+            <p className="rounded-md bg-[var(--spotify-elevated)] px-4 py-6 text-center text-sm text-white/45">
+              No episodes match &ldquo;{query.trim()}&rdquo;
+            </p>
+          ) : null}
+          {filtered.map((episode) => {
+            const isActive = episode.id === activeEpisodeId;
+
+            return (
             <Link
               key={episode.id}
-              className="block rounded-3xl border border-white/10 bg-slate-950/60 p-4 transition hover:border-cyan-300/30 hover:bg-white/10"
+              className={`block p-4 transition ${
+                isSpotify
+                  ? isActive
+                    ? "rounded-md bg-[var(--spotify-green)]/15 ring-1 ring-[var(--spotify-green)]/50"
+                    : "rounded-md bg-[var(--spotify-elevated)] hover:bg-[#2a2a2a]"
+                  : isActive
+                    ? "rounded-3xl border border-cyan-300/40 bg-cyan-400/10"
+                    : "rounded-3xl border border-white/10 bg-slate-950/60 hover:border-cyan-300/30 hover:bg-white/10"
+              }`}
               href={`/digest/${episode.slug}`}
             >
               <div className="flex items-center justify-between gap-4">
@@ -112,7 +163,8 @@ export function ArchiveSidebar({ episodes, rssUrl, variant = "default" }: Archiv
                 </div>
               ) : null}
             </Link>
-          ))}
+            );
+          })}
         </div>
       </section>
 

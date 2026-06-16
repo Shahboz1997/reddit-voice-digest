@@ -1,6 +1,6 @@
 import { getSubredditStation } from "@/lib/subreddit-stations";
 
-function subredditGradient(name: string) {
+export function subredditGradient(name: string) {
   let hash = 0;
 
   for (const char of name) {
@@ -55,7 +55,7 @@ export function EpisodeCoverArt({
   return (
     <div className={`flex flex-col items-center gap-4 ${className}`}>
       <SubredditArt size="xl" subredditName={primary} />
-      <p className="max-w-md text-center font-display text-lg font-extrabold uppercase tracking-wide text-white line-clamp-2 sm:text-xl">
+      <p className="max-w-md text-center font-display text-lg font-extrabold uppercase tracking-wide text-[var(--app-text)] line-clamp-2 sm:text-xl">
         {title}
       </p>
     </div>

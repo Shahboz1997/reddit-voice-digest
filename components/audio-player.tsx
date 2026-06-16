@@ -1,12 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BroadcastPlaylist } from "@/components/broadcast-playlist";
 import { Equalizer } from "@/components/equalizer";
+import { MobileBottomSheet } from "@/components/mobile-bottom-sheet";
+import { PlaybackRateControl, usePlaybackRate } from "@/components/playback-rate-control";
 import { PlaybackAudioVisualizer } from "@/components/playback-audio-visualizer";
 import { SubredditArt } from "@/components/subreddit-art";
+import { clearPlaybackPosition, savePlaybackPosition } from "@/lib/playback-position";
+import { expandPlayerEvent } from "@/lib/player-events";
+import { useMediaQuery } from "@/lib/use-media-query";
 import {
+  IconClose,
   IconPause,
   IconPlay,
   IconSkipBack,
@@ -22,9 +29,12 @@ interface AudioPlayerProps {
   playlistItems?: DigestItem[];
   variant?: "default" | "radio" | "spotify";
   nowPlayingTitle?: string;
+  episodeSlug?: string;
   initialSeekSeconds?: number;
   /** Parent-driven seek (e.g. queue row click). */
   seekRequest?: { seconds: number; token: number };
+  /** Parent-driven play (e.g. hero Play button). */
+  playRequest?: { token: number };
   onPlaybackChange?: (isPlaying: boolean) => void;
   onTimeUpdate?: (currentTime: number, activeChapter: DigestChapter | undefined) => void;
 }
@@ -44,6 +54,16 @@ function isBenignPlayError(error: unknown) {
   return dom.name === "AbortError" || dom.name === "NotAllowedError";
 }
 
+function findActiveChapter(chapters: DigestChapter[], currentTime: number) {
+  return (
+    chapters.find(
+      (chapter) =>
+        currentTime >= chapter.startSeconds &&
+        currentTime < Math.max(chapter.endSeconds, chapter.startSeconds + 1),
+    ) ?? chapters[chapters.length - 1]
+  );
+}
+
 export function AudioPlayer({
   audioUrl,
   durationSeconds,
@@ -51,28 +71,28 @@ export function AudioPlayer({
   playlistItems = [],
   variant = "default",
   nowPlayingTitle,
+  episodeSlug,
   initialSeekSeconds = 0,
   seekRequest,
+  playRequest,
   onPlaybackChange,
   onTimeUpdate,
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasRealAudio = Boolean(audioUrl);
+  const hasRealAudio = Boolean(audioUrl?.trim());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const playbackRate = usePlaybackRate();
   const isRadio = variant === "radio";
   const isSpotify = variant === "spotify";
+  const isMobileLayout = useMediaQuery("(max-width: 767px)");
+  const lastSavedPositionRef = useRef(0);
 
   useEffect(() => {
     onPlaybackChange?.(isPlaying);
   }, [isPlaying, onPlaybackChange]);
-
-  useEffect(() => {
-    if (!hasRealAudio) {
-      setIsPlaying(false);
-    }
-  }, [hasRealAudio]);
 
   useEffect(() => {
     if (hasRealAudio) {
@@ -88,16 +108,22 @@ export function AudioPlayer({
       return;
     }
 
+    const tickMs = Math.max(200, 1000 / playbackRate);
+
     intervalRef.current = setInterval(() => {
       setCurrentTime((previous) => {
         if (previous >= durationSeconds) {
-          setIsPlaying(false);
           return durationSeconds;
         }
 
-        return Math.min(previous + 1, durationSeconds);
+        const next = Math.min(previous + 1, durationSeconds);
+        if (next >= durationSeconds) {
+          queueMicrotask(() => setIsPlaying(false));
+        }
+
+        return next;
       });
-    }, 1000);
+    }, tickMs);
 
     return () => {
       if (intervalRef.current) {
@@ -105,7 +131,17 @@ export function AudioPlayer({
         intervalRef.current = null;
       }
     };
-  }, [durationSeconds, hasRealAudio, isPlaying]);
+  }, [durationSeconds, hasRealAudio, isPlaying, playbackRate]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !hasRealAudio) {
+      return;
+    }
+
+    audio.playbackRate = playbackRate;
+    audio.defaultPlaybackRate = playbackRate;
+  }, [hasRealAudio, playbackRate, audioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -154,41 +190,29 @@ export function AudioPlayer({
       return;
     }
 
-    audio.pause();
-    setIsPlaying(false);
-    setCurrentTime(0);
-  }, [audioUrl, hasRealAudio]);
+    const startAt = Math.min(Math.max(initialSeekSeconds, 0), durationSeconds);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !hasRealAudio || initialSeekSeconds <= 0) {
-      return;
-    }
-
-    const applySeek = () => {
-      const bounded = Math.min(Math.max(initialSeekSeconds, 0), durationSeconds);
-      audio.currentTime = bounded;
-      setCurrentTime(bounded);
+    const applyStartPosition = () => {
+      audio.currentTime = startAt;
+      setCurrentTime(startAt);
     };
 
+    audio.pause();
+    setIsPlaying(false);
+
     if (audio.readyState >= 1) {
-      applySeek();
+      applyStartPosition();
       return;
     }
 
-    audio.addEventListener("loadedmetadata", applySeek, { once: true });
-    return () => audio.removeEventListener("loadedmetadata", applySeek);
+    audio.addEventListener("loadedmetadata", applyStartPosition, { once: true });
+    return () => audio.removeEventListener("loadedmetadata", applyStartPosition);
   }, [audioUrl, durationSeconds, hasRealAudio, initialSeekSeconds]);
 
-  const activeChapter = useMemo(() => {
-    return (
-      chapters.find(
-        (chapter) =>
-          currentTime >= chapter.startSeconds &&
-          currentTime < Math.max(chapter.endSeconds, chapter.startSeconds + 1),
-      ) ?? chapters[chapters.length - 1]
-    );
-  }, [chapters, currentTime]);
+  const activeChapter = useMemo(
+    () => findActiveChapter(chapters, currentTime),
+    [chapters, currentTime],
+  );
 
   const activeChapterIndex = useMemo(() => {
     if (!activeChapter) {
@@ -199,7 +223,11 @@ export function AudioPlayer({
     return index >= 0 ? index : 0;
   }, [activeChapter, chapters]);
 
-  const activeSubreddit = playlistItems[activeChapterIndex]?.subredditName ?? playlistItems[0]?.subredditName ?? "reddit";
+  const activeSubreddit =
+    playlistItems[activeChapterIndex]?.subredditName ?? playlistItems[0]?.subredditName ?? "reddit";
+
+  const canSkipBack = activeChapterIndex > 0;
+  const canSkipForward = activeChapterIndex < chapters.length - 1;
 
   useEffect(() => {
     onTimeUpdate?.(currentTime, activeChapter);
@@ -208,8 +236,15 @@ export function AudioPlayer({
   const progress = durationSeconds > 0 ? Math.min((currentTime / durationSeconds) * 100, 100) : 0;
 
   function skipChapter(direction: -1 | 1) {
-    const index = chapters.findIndex((chapter) => chapter.id === activeChapter?.id);
-    const next = chapters[index + direction];
+    if (!chapters.length) {
+      return;
+    }
+
+    const index = activeChapter
+      ? chapters.findIndex((chapter) => chapter.id === activeChapter.id)
+      : 0;
+    const fromIndex = index >= 0 ? index : 0;
+    const next = chapters[fromIndex + direction];
 
     if (next) {
       seekTo(next.startSeconds);
@@ -279,6 +314,12 @@ export function AudioPlayer({
 
   const seekToRef = useRef(seekTo);
   seekToRef.current = seekTo;
+  const currentTimeRef = useRef(currentTime);
+  currentTimeRef.current = currentTime;
+  const skipChapterRef = useRef(skipChapter);
+  skipChapterRef.current = skipChapter;
+  const togglePlaybackRef = useRef(togglePlayback);
+  togglePlaybackRef.current = togglePlayback;
 
   useEffect(() => {
     if (seekRequest == null) {
@@ -288,8 +329,266 @@ export function AudioPlayer({
     seekToRef.current(seekRequest.seconds);
   }, [seekRequest]);
 
+  useEffect(() => {
+    if (playRequest == null) {
+      return;
+    }
+
+    if (hasRealAudio && audioRef.current) {
+      void audioRef.current.play().catch((error) => {
+        if (!isBenignPlayError(error)) {
+          console.error(error);
+        }
+      });
+      return;
+    }
+
+    setIsPlaying(true);
+  }, [hasRealAudio, playRequest]);
+
+  useEffect(() => {
+    if (!isSpotify) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlaybackRef.current();
+        return;
+      }
+
+      if (event.code === "ArrowLeft") {
+        event.preventDefault();
+        seekToRef.current(Math.max(0, currentTimeRef.current - 10));
+        return;
+      }
+
+      if (event.code === "ArrowRight") {
+        event.preventDefault();
+        seekToRef.current(Math.min(durationSeconds, currentTimeRef.current + 10));
+        return;
+      }
+
+      if (event.code === "ArrowUp") {
+        event.preventDefault();
+        skipChapterRef.current(-1);
+        return;
+      }
+
+      if (event.code === "ArrowDown") {
+        event.preventDefault();
+        skipChapterRef.current(1);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [durationSeconds, isSpotify]);
+
+  useEffect(() => {
+    if (!isSpotify) {
+      return;
+    }
+
+    function handleExpandRequest() {
+      setMobileExpanded(true);
+    }
+
+    window.addEventListener(expandPlayerEvent, handleExpandRequest);
+    return () => window.removeEventListener(expandPlayerEvent, handleExpandRequest);
+  }, [isSpotify]);
+
+  useEffect(() => {
+    if (!isSpotify || !episodeSlug || currentTime < 3) {
+      return;
+    }
+
+    if (Math.abs(currentTime - lastSavedPositionRef.current) < 5) {
+      return;
+    }
+
+    lastSavedPositionRef.current = currentTime;
+    savePlaybackPosition(episodeSlug, currentTime);
+  }, [currentTime, episodeSlug, isSpotify]);
+
+  useEffect(() => {
+    if (!isSpotify || !hasRealAudio || typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+
+    const displayTitle = activeChapter?.label ?? nowPlayingTitle ?? "Reddit Voice Digest";
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: displayTitle,
+      artist: `r/${activeSubreddit}`,
+      album: nowPlayingTitle ?? "Reddit Voice Digest",
+    });
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+
+    try {
+      navigator.mediaSession.setActionHandler("play", () => {
+        togglePlaybackRef.current();
+      });
+      navigator.mediaSession.setActionHandler("pause", () => {
+        togglePlaybackRef.current();
+      });
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        skipChapterRef.current(-1);
+      });
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        skipChapterRef.current(1);
+      });
+      navigator.mediaSession.setActionHandler("seekbackward", () => {
+        seekToRef.current(Math.max(0, currentTimeRef.current - 15));
+      });
+      navigator.mediaSession.setActionHandler("seekforward", () => {
+        seekToRef.current(Math.min(durationSeconds, currentTimeRef.current + 15));
+      });
+    } catch {
+      // Some browsers reject handlers when not playing
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("previoustrack", null);
+        navigator.mediaSession.setActionHandler("nexttrack", null);
+        navigator.mediaSession.setActionHandler("seekbackward", null);
+        navigator.mediaSession.setActionHandler("seekforward", null);
+      } catch {
+        // ignore
+      }
+    };
+  }, [
+    activeChapter?.label,
+    activeSubreddit,
+    durationSeconds,
+    hasRealAudio,
+    isPlaying,
+    isSpotify,
+    nowPlayingTitle,
+  ]);
+
+  useEffect(() => {
+    if (isPlaying || currentTime < durationSeconds - 5 || !episodeSlug) {
+      return;
+    }
+
+    if (currentTime >= durationSeconds - 1 && durationSeconds > 0) {
+      clearPlaybackPosition(episodeSlug);
+    }
+  }, [currentTime, durationSeconds, episodeSlug, isPlaying]);
+
   if (isSpotify) {
     const displayTitle = activeChapter?.label ?? nowPlayingTitle ?? "Reddit Voice Digest";
+
+    const nowPlayingMeta = (
+      <div className="min-w-0">
+        {episodeSlug ? (
+          <Link
+            className="block truncate text-sm font-semibold text-white transition hover:text-[var(--spotify-green)] hover:underline"
+            href={`/digest/${episodeSlug}`}
+            onClick={(event) => event.stopPropagation()}
+            title={displayTitle}
+          >
+            {displayTitle}
+          </Link>
+        ) : (
+          <p className="truncate text-sm font-semibold text-white">{displayTitle}</p>
+        )}
+        <div className="truncate text-xs text-white/45">
+          {isPlaying ? (
+            <span className="inline-flex items-center gap-2">
+              <Equalizer active className="!h-3 !gap-[2px] [&_.equalizer__bar]:w-[3px]" />
+              <span className="font-display text-xs font-bold uppercase tracking-wider text-[var(--radio-pink)]">
+                Live
+              </span>
+            </span>
+          ) : (
+            <span className="font-mono tabular-nums">
+              {formatTime(currentTime)} / {formatTime(durationSeconds)}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+
+    const transportControls = (size: "compact" | "full") => (
+      <div className={`flex items-center justify-center ${size === "full" ? "gap-3 py-2" : "gap-1"}`}>
+        <button
+          aria-label="Previous segment"
+          className={`flex items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent ${
+            size === "full" ? "h-12 w-12" : "h-11 w-11"
+          }`}
+          disabled={!canSkipBack}
+          onClick={() => skipChapter(-1)}
+          type="button"
+        >
+          <IconSkipBack className="h-5 w-5" />
+        </button>
+        <button
+          aria-label={isPlaying ? "Pause" : "Play"}
+          aria-pressed={isPlaying}
+          className={`flex items-center justify-center rounded-full bg-white text-black transition hover:scale-105 active:scale-95 ${
+            size === "full" ? "h-14 w-14" : "h-11 w-11"
+          }`}
+          onClick={() => {
+            void togglePlayback();
+          }}
+          type="button"
+        >
+          {isPlaying ? <IconPause className="h-6 w-6" /> : <IconPlay className="h-6 w-6" />}
+        </button>
+        <button
+          aria-label="Next segment"
+          className={`flex items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent ${
+            size === "full" ? "h-12 w-12" : "h-11 w-11"
+          }`}
+          disabled={!canSkipForward}
+          onClick={() => skipChapter(1)}
+          type="button"
+        >
+          <IconSkipForward className="h-5 w-5" />
+        </button>
+      </div>
+    );
+
+    const seekBar = (className = "") => (
+      <div className={`flex items-center gap-3 ${className}`}>
+        <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-white/45">
+          {formatTime(currentTime)}
+        </span>
+        <input
+          aria-label="Seek"
+          className="radio-seek radio-seek--touch min-w-0 flex-1"
+          max={durationSeconds}
+          min={0}
+          onChange={(event) => {
+            seekTo(Number(event.target.value));
+          }}
+          step={1}
+          type="range"
+          value={currentTime}
+        />
+        <span className="w-10 shrink-0 font-mono text-xs tabular-nums text-white/45">
+          {formatTime(durationSeconds)}
+        </span>
+      </div>
+    );
 
     return (
       <>
@@ -299,65 +598,29 @@ export function AudioPlayer({
           </audio>
         ) : null}
 
-        <footer className="spotify-player-bar fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#0a0a0a]/92 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2 sm:gap-4 sm:px-6">
-            <div className="flex min-w-0 flex-[1.2] items-center gap-3">
-              <SubredditArt size="md" subredditName={activeSubreddit} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{displayTitle}</p>
-                <div className="truncate text-xs text-white/45">
-                  {isPlaying ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Equalizer active className="!h-3 !gap-[2px] [&_.equalizer__bar]:w-[3px]" />
-                      <span className="font-display text-[10px] font-bold uppercase tracking-wider text-[var(--radio-pink)]">
-                        Live
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="font-mono tabular-nums">
-                      {formatTime(currentTime)} / {formatTime(durationSeconds)}
-                    </span>
-                  )}
-                </div>
-              </div>
+        <footer
+          className={`spotify-player-bar app-ui fixed inset-x-0 bottom-0 z-50 border-t backdrop-blur-xl ${
+            isMobileLayout ? "spotify-player-bar--compact" : ""
+          }`}
+        >
+          {/* Mobile: compact mini-player */}
+          <div className="md:hidden">
+            <div className="mx-auto flex max-w-lg items-center gap-2 px-3 pt-2">
+              <button
+                aria-label="Open player"
+                className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg text-left active:bg-white/5"
+                onClick={() => setMobileExpanded(true)}
+                type="button"
+              >
+                <SubredditArt size="md" subredditName={activeSubreddit} />
+                {nowPlayingMeta}
+              </button>
+              {transportControls("compact")}
             </div>
-
-            <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
-              <button
-                aria-label="Previous segment"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white"
-                onClick={() => skipChapter(-1)}
-                type="button"
-              >
-                <IconSkipBack className="h-5 w-5" />
-              </button>
-              <button
-                aria-label={isPlaying ? "Pause" : "Play"}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 active:scale-95"
-                onClick={() => {
-                  void togglePlayback();
-                }}
-                type="button"
-              >
-                {isPlaying ? <IconPause className="h-5 w-5" /> : <IconPlay className="h-5 w-5" />}
-              </button>
-              <button
-                aria-label="Next segment"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white"
-                onClick={() => skipChapter(1)}
-                type="button"
-              >
-                <IconSkipForward className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="hidden min-w-0 flex-[1.5] items-center gap-3 md:flex">
-              <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-white/45">
-                {formatTime(currentTime)}
-              </span>
+            <div className="px-3 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1">
               <input
                 aria-label="Seek"
-                className="radio-seek min-w-0 flex-1"
+                className="radio-seek radio-seek--touch radio-seek--thin w-full"
                 max={durationSeconds}
                 min={0}
                 onChange={(event) => {
@@ -367,28 +630,80 @@ export function AudioPlayer({
                 type="range"
                 value={currentTime}
               />
-              <span className="w-10 shrink-0 font-mono text-xs tabular-nums text-white/45">
-                {formatTime(durationSeconds)}
-              </span>
-              <IconVolume className="h-5 w-5 shrink-0 text-white/35" />
             </div>
           </div>
 
-          <div className="border-t border-white/5 px-3 pb-2 pt-1 md:hidden">
-            <input
-              aria-label="Seek"
-              className="radio-seek w-full"
-              max={durationSeconds}
-              min={0}
-              onChange={(event) => {
-                seekTo(Number(event.target.value));
-              }}
-              step={1}
-              type="range"
-              value={currentTime}
-            />
+          {/* Desktop: full player bar */}
+          <div className="hidden md:block">
+            <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-2 sm:gap-4 sm:px-6">
+              <div className="flex min-w-0 flex-[1.2] items-center gap-3">
+                <SubredditArt size="md" subredditName={activeSubreddit} />
+                {nowPlayingMeta}
+              </div>
+
+              {transportControls("compact")}
+
+              <div className="flex min-w-0 flex-[1.5] items-center gap-3">
+                {seekBar()}
+                <PlaybackRateControl compact />
+                <IconVolume className="hidden h-5 w-5 shrink-0 text-white/35 lg:block" aria-hidden />
+              </div>
+            </div>
           </div>
         </footer>
+
+        {isMobileLayout ? (
+          <MobileBottomSheet
+            ariaLabel="Now playing"
+            onClose={() => setMobileExpanded(false)}
+            open={mobileExpanded}
+          >
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--app-border)] px-4 py-3">
+              <h2 className="text-sm font-bold text-[var(--app-text)]">Now playing</h2>
+              <button
+                aria-label="Close player"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--app-text-muted)] transition hover:bg-[var(--app-chip-bg)] hover:text-[var(--app-text)]"
+                onClick={() => setMobileExpanded(false)}
+                type="button"
+              >
+                <IconClose className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="flex flex-col items-center gap-4 py-4">
+                <SubredditArt className="!h-28 !w-28 !rounded-lg" size="lg" subredditName={activeSubreddit} />
+                <div className="w-full text-center">
+                  <p className="text-lg font-bold text-[var(--app-text)]">{displayTitle}</p>
+                  {nowPlayingTitle ? (
+                    <p className="mt-1 line-clamp-2 text-sm text-[var(--app-text-muted)]">{nowPlayingTitle}</p>
+                  ) : null}
+                </div>
+                {transportControls("full")}
+                {seekBar("w-full max-w-md")}
+                <div className="flex justify-center">
+                  <PlaybackRateControl compact />
+                </div>
+              </div>
+
+              {playlistItems.length > 0 ? (
+                <div className="mt-2 rounded-lg bg-[var(--app-surface-elevated)] p-3">
+                  <BroadcastPlaylist
+                    activeChapterId={activeChapter?.id}
+                    chapters={chapters}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                    items={playlistItems}
+                    onSelect={(seconds) => {
+                      seekTo(seconds);
+                    }}
+                    variant="spotify"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </MobileBottomSheet>
+        ) : null}
       </>
     );
   }
@@ -408,6 +723,7 @@ export function AudioPlayer({
               <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-between">
                 <button
                   aria-label={isPlaying ? "Pause" : "Play"}
+                aria-pressed={isPlaying}
                   className="radio-play-btn group relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-[var(--radio-pink)] text-black transition hover:scale-[1.03] active:scale-[0.98] sm:h-32 sm:w-32"
                   onClick={() => {
                     void togglePlayback();
@@ -555,8 +871,7 @@ export function AudioPlayer({
 
       <div className="grid gap-3 md:grid-cols-3">
         {chapters.map((chapter) => {
-          const isActive =
-            currentTime >= chapter.startSeconds && currentTime < Math.max(chapter.endSeconds, chapter.startSeconds + 1);
+          const isActive = activeChapter?.id === chapter.id;
 
           return (
             <button

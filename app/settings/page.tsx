@@ -13,17 +13,16 @@ import { publicEnv } from "@/lib/config";
 
 export default function SettingsPage() {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-      <header className="radio-glass flex flex-col gap-5 rounded-2xl px-6 py-5 md:flex-row md:items-center md:justify-between">
+    <main className="app-ui mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <BrandMark />
-
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
           <AuthHeader />
           <Link
-            className="inline-flex rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white transition hover:border-cyan-300/30 hover:text-cyan-200"
+            className="inline-flex rounded-full border border-[var(--app-border)] px-4 py-2 text-sm font-bold text-[var(--app-text-muted)] transition hover:bg-[var(--app-surface-elevated)] hover:text-[var(--app-text)]"
             href="/"
           >
-            Back to dashboard
+            Home
           </Link>
         </div>
       </header>

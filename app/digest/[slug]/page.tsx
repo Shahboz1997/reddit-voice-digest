@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { DigestPageClient } from "@/components/digest-page-client";
-import { publicEnv } from "@/lib/config";
+import { hasSupabaseBrowserEnv, publicEnv } from "@/lib/config";
 import { getPublishedDigestBySlug } from "@/lib/data/digests";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 interface DigestPageProps {
   params: Promise<{
@@ -15,9 +18,39 @@ interface DigestPageProps {
   }>;
 }
 
+function digestPageUrl(slug: string) {
+  return `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/digest/${slug}`;
+}
+
+function serializeJsonLd(payload: object) {
+  return JSON.stringify(payload).replace(/</g, "\\u003c");
+}
+
+async function resolveViewerUserId() {
+  if (!hasSupabaseBrowserEnv()) {
+    return null;
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const loadDigestEpisode = cache(async (slug: string, viewerUserId: string | null) => {
+  return getPublishedDigestBySlug(slug, viewerUserId);
+});
+
 export async function generateMetadata({ params }: DigestPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const episode = await getPublishedDigestBySlug(slug);
+  const viewerUserId = await resolveViewerUserId();
+  const episode = await loadDigestEpisode(slug, viewerUserId);
 
   if (!episode) {
     return {
@@ -25,7 +58,7 @@ export async function generateMetadata({ params }: DigestPageProps): Promise<Met
     };
   }
 
-  const pageUrl = `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/digest/${slug}`;
+  const pageUrl = digestPageUrl(slug);
   const description = episode.introText || episode.summary.slice(0, 160);
 
   return {
@@ -53,11 +86,8 @@ export async function generateMetadata({ params }: DigestPageProps): Promise<Met
 export default async function DigestPage({ params, searchParams }: DigestPageProps) {
   const { slug } = await params;
   const { t } = await searchParams;
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const episode = await getPublishedDigestBySlug(slug, user?.id ?? null);
+  const viewerUserId = await resolveViewerUserId();
+  const episode = await loadDigestEpisode(slug, viewerUserId);
 
   if (!episode) {
     notFound();
@@ -68,7 +98,7 @@ export default async function DigestPage({ params, searchParams }: DigestPagePro
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   })();
 
-  const pageUrl = `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/digest/${slug}`;
+  const pageUrl = digestPageUrl(slug);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "PodcastEpisode",
@@ -77,12 +107,14 @@ export default async function DigestPage({ params, searchParams }: DigestPagePro
     datePublished: episode.publishedAt,
     url: pageUrl,
     duration: `PT${Math.max(1, episode.durationSeconds)}S`,
-    associatedMedia: episode.audioUrl
+    ...(episode.audioUrl
       ? {
-          "@type": "MediaObject",
-          contentUrl: episode.audioUrl,
+          associatedMedia: {
+            "@type": "MediaObject",
+            contentUrl: episode.audioUrl,
+          },
         }
-      : undefined,
+      : {}),
     partOfSeries: {
       "@type": "PodcastSeries",
       name: "Reddit Voice Digest",
@@ -91,16 +123,17 @@ export default async function DigestPage({ params, searchParams }: DigestPagePro
   };
 
   return (
-    <>
+    <main className="min-h-screen">
+      <h1 className="sr-only">{episode.title}</h1>
       <script
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         type="application/ld+json"
       />
       <DigestPageClient
         episode={episode}
         initialSeekSeconds={initialSeekSeconds}
-        rssUrl={`${publicEnv.NEXT_PUBLIC_APP_URL}/api/podcast/feed`}
+        rssUrl={`${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/podcast/feed`}
       />
-    </>
+    </main>
   );
 }

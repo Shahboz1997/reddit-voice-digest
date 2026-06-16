@@ -9,6 +9,8 @@ const eslintConfig = [
       ".next/**",
       "node_modules/**",
       "supabase/functions/**",
+      "db.js",
+      "scripts/**/*.cjs",
     ],
   },
 ];
