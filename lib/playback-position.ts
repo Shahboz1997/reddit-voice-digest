@@ -7,6 +7,13 @@ export interface SavedPlaybackPosition {
   updatedAt: number;
 }
 
+let cachedRaw: string | null | undefined;
+let cachedPosition: SavedPlaybackPosition | null = null;
+
+function invalidatePlaybackPositionCache() {
+  cachedRaw = undefined;
+}
+
 export function savePlaybackPosition(slug: string, seconds: number) {
   if (typeof window === "undefined" || !slug || seconds < 3) {
     return;
@@ -18,7 +25,10 @@ export function savePlaybackPosition(slug: string, seconds: number) {
       seconds: Math.floor(seconds),
       updatedAt: Date.now(),
     };
-    window.localStorage.setItem(storageKey, JSON.stringify(payload));
+    const raw = JSON.stringify(payload);
+    window.localStorage.setItem(storageKey, raw);
+    cachedRaw = raw;
+    cachedPosition = payload;
     window.dispatchEvent(new CustomEvent(changeEvent));
   } catch {
     // ignore quota errors
@@ -28,11 +38,15 @@ export function savePlaybackPosition(slug: string, seconds: number) {
 export function subscribePlaybackPosition(onStoreChange: () => void) {
   const handleStorage = (event: StorageEvent) => {
     if (event.key === storageKey || event.key === null) {
+      invalidatePlaybackPositionCache();
       onStoreChange();
     }
   };
 
-  const handleLocal = () => onStoreChange();
+  const handleLocal = () => {
+    invalidatePlaybackPositionCache();
+    onStoreChange();
+  };
 
   window.addEventListener("storage", handleStorage);
   window.addEventListener(changeEvent, handleLocal);
@@ -49,17 +63,29 @@ export function loadPlaybackPosition(): SavedPlaybackPosition | null {
 
   try {
     const raw = window.localStorage.getItem(storageKey);
+
+    if (raw === cachedRaw) {
+      return cachedPosition;
+    }
+
+    cachedRaw = raw;
+
     if (!raw) {
+      cachedPosition = null;
       return null;
     }
 
     const parsed = JSON.parse(raw) as SavedPlaybackPosition;
     if (!parsed.slug || typeof parsed.seconds !== "number") {
+      cachedPosition = null;
       return null;
     }
 
-    return parsed;
+    cachedPosition = parsed;
+    return cachedPosition;
   } catch {
+    invalidatePlaybackPositionCache();
+    cachedPosition = null;
     return null;
   }
 }
@@ -72,12 +98,16 @@ export function clearPlaybackPosition(slug?: string) {
   try {
     if (!slug) {
       window.localStorage.removeItem(storageKey);
+      cachedRaw = null;
+      cachedPosition = null;
       return;
     }
 
     const current = loadPlaybackPosition();
     if (current?.slug === slug) {
       window.localStorage.removeItem(storageKey);
+      cachedRaw = null;
+      cachedPosition = null;
       window.dispatchEvent(new CustomEvent(changeEvent));
     }
   } catch {

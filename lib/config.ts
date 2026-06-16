@@ -37,7 +37,7 @@ const serverEnvSchema = z.object({
   OPENAI_SCRIPT_MODEL: z.preprocess(emptyStringToUndefined, z.string().optional()),
   OPENAI_TTS_MODEL: z.preprocess(
     emptyStringToUndefined,
-    z.string().default("gpt-4o-mini-tts"),
+    z.string().default("gpt-audio-1.5"),
   ),
   OPENAI_TTS_VOICE: z.preprocess(emptyStringToUndefined, z.string().default("alloy")),
   REDDIT_CLIENT_ID: z.preprocess(emptyStringToUndefined, z.string().min(1)),
@@ -118,12 +118,61 @@ export function getServerEnv() {
 
 export type ServerEnv = ReturnType<typeof getServerEnv>;
 
+const openAiTtsEnvSchema = z.object({
+  OPENAI_API_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1)),
+  OPENAI_TTS_MODEL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().default("gpt-audio-1.5"),
+  ),
+  OPENAI_TTS_VOICE: z.preprocess(emptyStringToUndefined, z.string().default("alloy")),
+});
+
+export type OpenAiTtsEnv = ReturnType<typeof getOpenAiTtsEnv>;
+
+/** TTS-only env — does not require Reddit/Supabase credentials. */
+export function getOpenAiTtsEnv() {
+  const env = openAiTtsEnvSchema.parse({
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_TTS_MODEL: process.env.OPENAI_TTS_MODEL,
+    OPENAI_TTS_VOICE: process.env.OPENAI_TTS_VOICE,
+  });
+
+  return {
+    ...env,
+    OPENAI_TTS_MODEL: resolveOpenAiTtsModel(env.OPENAI_TTS_MODEL),
+  };
+}
+
 export function resolveOpenAiSummaryModel(env: ServerEnv) {
   return env.OPENAI_SUMMARY_MODEL?.trim() || env.OPENAI_MODEL;
 }
 
 export function resolveOpenAiScriptModel(env: ServerEnv) {
   return env.OPENAI_SCRIPT_MODEL?.trim() || env.OPENAI_MODEL;
+}
+
+const KNOWN_OPENAI_TTS_MODELS = new Set([
+  "gpt-audio-1.5",
+  "gpt-4o-mini-tts",
+  "tts-1",
+  "tts-1-hd",
+  "tts-1-1106",
+  "tts-1-hd-1106",
+]);
+
+/** Normalizes common .env typos (e.g. gpt-4o-mini-tts-1-1106) to a supported model. */
+export function resolveOpenAiTtsModel(raw: string | undefined) {
+  const model = raw?.trim() || "gpt-audio-1.5";
+
+  if (KNOWN_OPENAI_TTS_MODELS.has(model) || model.startsWith("gpt-audio")) {
+    return model;
+  }
+
+  if (model === "gpt-4o-mini-tts-1-1106") {
+    return "gpt-audio-1.5";
+  }
+
+  return model;
 }
 
 export function elevenLabsDefaultVoiceSettings(env: ServerEnv) {

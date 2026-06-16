@@ -1,127 +1,220 @@
 import type { DigestEpisode } from "@/lib/types";
+import { CHOCOLATE_PROCESS_TEXT, IELTS_OPENER_TEXT, TTS_PRESETS } from "@/lib/tts-presets";
 
 export const demoEpisodes: DigestEpisode[] = [
   {
+    id: "episode-2026-06-17",
+    slug: "cocoa-bean-to-chocolate-process",
+    title: "From Cocoa Bean to Chocolate",
+    summary:
+      "A step-by-step audio walkthrough of the process diagram: fermentation, roasting, grinding, pressing, conching, and tempering.",
+    introText:
+      "Follow the full transformation from harvested cocoa pods to a glossy chocolate bar — each stage explained in order.",
+    transcriptText: CHOCOLATE_PROCESS_TEXT,
+    publishedAt: "2026-06-17T07:15:00.000Z",
+    durationSeconds: TTS_PRESETS["chocolate-process"].estimatedDurationSeconds,
+    durationLabel: "2 min",
+    audioUrl: "/api/tts?preset=chocolate-process",
+    topics: ["food", "manufacturing", "process-diagram"],
+    keyThoughts: [
+      "Fermentation develops flavor precursors that roasting later unlocks.",
+      "Grinding turns nibs into cocoa liquor — the base for both powder and bars.",
+      "Tempering gives chocolate its snap, shine, and stable shelf life.",
+    ],
+    chapters: [
+      {
+        id: "chapter-cocoa-1",
+        label: "Harvest & fermentation",
+        startSeconds: 0,
+        endSeconds: 22,
+        summary: "Pods are opened, beans ferment to develop flavor and reduce bitterness.",
+      },
+      {
+        id: "chapter-cocoa-2",
+        label: "Drying & roasting",
+        startSeconds: 22,
+        endSeconds: 40,
+        summary: "Beans are dried, then roasted to deepen aroma via the Maillard reaction.",
+      },
+      {
+        id: "chapter-cocoa-3",
+        label: "Cracking & grinding",
+        startSeconds: 40,
+        endSeconds: 58,
+        summary: "Shells are winnowed away; nibs are ground into cocoa liquor.",
+      },
+      {
+        id: "chapter-cocoa-4",
+        label: "Pressing",
+        startSeconds: 58,
+        endSeconds: 70,
+        summary: "Liquor is pressed into cocoa butter and cocoa powder.",
+      },
+      {
+        id: "chapter-cocoa-5",
+        label: "Conching",
+        startSeconds: 70,
+        endSeconds: 82,
+        summary: "Liquor is blended with sugar and conched for smooth texture.",
+      },
+      {
+        id: "chapter-cocoa-6",
+        label: "Tempering & molding",
+        startSeconds: 82,
+        endSeconds: TTS_PRESETS["chocolate-process"].estimatedDurationSeconds,
+        summary: "Tempered chocolate is molded, cooled, and wrapped into bars.",
+      },
+    ],
+    items: [
+      {
+        id: "item-cocoa-1",
+        threadTitle: "Harvest & fermentation",
+        subredditName: "foodscience",
+        whyItMatters:
+          "Fermentation is where flavor precursors form — skipping it leaves beans bitter and flat.",
+        summary:
+          "Ripe pods are harvested, beans are extracted with pulp, and natural fermentation develops the flavors roasting will later release.",
+        keyTakeaways: [
+          "Fermentation reduces bitterness.",
+          "Yeasts and bacteria break down pulp.",
+          "Flavor precursors develop before roasting.",
+        ],
+        tldrPoints: [
+          "Beans leave the pod surrounded by sweet pulp.",
+          "Fermentation lasts several days.",
+          "Without it, chocolate tastes harsh.",
+        ],
+        startSeconds: 0,
+        endSeconds: 22,
+        redditThreadUrl: "https://www.reddit.com/r/foodscience/",
+        redditCommentUrl: "https://www.reddit.com/r/foodscience/",
+        commentCtaLabel: "Open r/foodscience",
+      },
+      {
+        id: "item-cocoa-2",
+        threadTitle: "Drying & roasting",
+        subredditName: "foodscience",
+        whyItMatters:
+          "Roasting unlocks chocolate aroma and color after moisture is removed during drying.",
+        summary:
+          "Fermented beans are dried to low moisture, then roasted at controlled heat to trigger Maillard browning and deepen flavor.",
+        keyTakeaways: [
+          "Drying prevents mold during storage.",
+          "Roasting develops characteristic aroma.",
+          "Temperature control shapes flavor profile.",
+        ],
+        tldrPoints: [
+          "Sun or mechanical drying follows fermentation.",
+          "Roasting drives off remaining water.",
+          "Maillard reaction deepens chocolate notes.",
+        ],
+        startSeconds: 22,
+        endSeconds: 40,
+        redditThreadUrl: "https://www.reddit.com/r/foodscience/",
+        redditCommentUrl: "https://www.reddit.com/r/foodscience/",
+        commentCtaLabel: "Open r/foodscience",
+      },
+      {
+        id: "item-cocoa-3",
+        threadTitle: "Cracking, winnowing & grinding",
+        subredditName: "foodscience",
+        whyItMatters:
+          "Grinding converts solid nibs into cocoa liquor — the foundation for both powder and bars.",
+        summary:
+          "Roasted beans are cracked into nibs, shells are winnowed off, and rollers grind nibs until cocoa fat melts into liquor.",
+        keyTakeaways: [
+          "Nibs are the edible core of the bean.",
+          "Winnowing separates light shells.",
+          "Grinding friction melts cocoa butter in place.",
+        ],
+        tldrPoints: [
+          "Cracking breaks roasted beans apart.",
+          "Winnowing removes papery shells.",
+          "Liquor is thick melted cocoa mass.",
+        ],
+        startSeconds: 40,
+        endSeconds: 58,
+        redditThreadUrl: "https://www.reddit.com/r/foodscience/",
+        redditCommentUrl: "https://www.reddit.com/r/foodscience/",
+        commentCtaLabel: "Open r/foodscience",
+      },
+      {
+        id: "item-cocoa-4",
+        threadTitle: "Pressing, conching & tempering",
+        subredditName: "foodscience",
+        whyItMatters:
+          "Pressing, conching, and tempering determine texture, mouthfeel, and whether the bar snaps cleanly.",
+        summary:
+          "Liquor may be pressed into butter and powder; for bars it is conched with sugar, then tempered and molded.",
+        keyTakeaways: [
+          "Pressing yields cocoa butter and powder.",
+          "Conching smooths and rounds flavor.",
+          "Tempering creates gloss and a clean snap.",
+        ],
+        tldrPoints: [
+          "Cocoa butter is pressed out of liquor.",
+          "Conching kneads the mixture for hours.",
+          "Tempered chocolate sets shiny and stable.",
+        ],
+        startSeconds: 58,
+        endSeconds: TTS_PRESETS["chocolate-process"].estimatedDurationSeconds,
+        redditThreadUrl: "https://www.reddit.com/r/foodscience/",
+        redditCommentUrl: "https://www.reddit.com/r/foodscience/",
+        commentCtaLabel: "Open r/foodscience",
+      },
+    ],
+  },
+  {
     id: "episode-2026-05-14",
     slug: "main-insights-from-reddit-2026-05-14",
-    title: "The Best Of Reddit For May 14",
+    title: "IELTS Writing: Strong Openers",
     summary:
-      "A five-minute digest of the strongest ideas from massive Reddit threads on focus, emergency funds, and startup validation.",
+      "Why examiners tune out generic openers like \"in today's modern world\" — and how to lead with a Band 7+ claim instead.",
     introText:
-      "Three huge Reddit discussions, reduced to one short listen you can finish before the next meeting starts.",
-    transcriptText:
-      "Welcome to Reddit Voice Digest. Today we are pulling signal from three massive Reddit threads. First, a productivity discussion about reducing context switching. The comments with the highest agreement pushed people toward batching communication, protecting ninety-minute focus blocks, and ending the day by writing tomorrow's first task. Second, a personal finance conversation on emergency funds. Most of the practical advice centered on keeping three to six months in cash, then expanding that target when income is unstable or fixed obligations are high. Third, an entrepreneurship thread on early founder mistakes. The most repeated lesson was to sell before you build and talk to customers before you automate anything. Across all three discussions, the pattern is clear. Reduce noise, choose fewer priorities, and pick actions that reveal useful information fast.",
+      "A 30-second listen on Lexical Resource: drop the throat-clearing and state your actual claim first.",
+    transcriptText: IELTS_OPENER_TEXT,
     publishedAt: "2026-05-14T07:15:00.000Z",
-    durationSeconds: 300,
-    durationLabel: "5 min",
-    audioUrl: "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
-    topics: ["finance", "productivity", "startups"],
+    durationSeconds: TTS_PRESETS["ielts-opener"].estimatedDurationSeconds,
+    durationLabel: "30 sec",
+    audioUrl: "/api/tts?preset=ielts-opener",
+    topics: ["ielts", "writing", "lexical-resource"],
     keyThoughts: [
-      "Protect focus windows before adding another productivity system.",
-      "Emergency funds depend on income stability more than generic advice.",
-      "Revenue beats assumptions when validating a product.",
+      "Examiners hear the same generic openers dozens of times per shift.",
+      "They're scoring Lexical Resource from your first sentences.",
+      "Specific openers signal Band 7+ thinking.",
     ],
     chapters: [
       {
         id: "chapter-1",
-        label: "Productivity systems",
+        label: "IELTS openers",
         startSeconds: 0,
-        endSeconds: 92,
-        summary: "How people reduce context switching and keep workdays from fragmenting.",
-      },
-      {
-        id: "chapter-2",
-        label: "Emergency funds",
-        startSeconds: 92,
-        endSeconds: 188,
-        summary: "Why emergency fund targets expand or shrink depending on risk and obligations.",
-      },
-      {
-        id: "chapter-3",
-        label: "Startup mistakes",
-        startSeconds: 188,
-        endSeconds: 300,
-        summary: "Why founders regret building early and selling late.",
+        endSeconds: TTS_PRESETS["ielts-opener"].estimatedDurationSeconds,
+        summary: IELTS_OPENER_TEXT,
       },
     ],
     items: [
       {
         id: "item-1",
-        threadTitle: "What habit saved you the most time at work?",
-        subredditName: "productivity",
+        threadTitle: "Drop generic IELTS openers",
+        subredditName: "IELTS",
         whyItMatters:
-          "The thread distilled practical anti-burnout systems instead of generic motivation advice.",
-        summary:
-          "The highest-value comments recommended batching meetings, muting low-priority notifications, and ending the day by writing the next morning's first task.",
+          "Examiners hear the same throat-clearing phrases dozens of times per shift — specific openers signal Band 7+ lexical range.",
+        summary: IELTS_OPENER_TEXT,
         keyTakeaways: [
-          "Protect 90-minute focus blocks.",
-          "Move chat and email into fixed windows.",
-          "Leave yourself a low-friction start for tomorrow.",
+          "Avoid \"in today's modern world\" and similar fillers.",
+          "Lead with your actual claim, not a warm-up sentence.",
+          "Specific openers signal stronger Lexical Resource.",
         ],
         tldrPoints: [
-          "Time savings came from fewer context switches, not from working faster.",
-          "People got better results by batching communication into fixed windows.",
-          "A shutdown ritual made the next morning easier to start.",
+          "Generic openers signal generic thinking to examiners.",
+          "They're scoring Lexical Resource from your first sentences.",
+          "Drop the throat-clearing; state the claim immediately.",
         ],
         startSeconds: 0,
-        endSeconds: 92,
-        redditThreadUrl:
-          "https://www.reddit.com/r/productivity/comments/1abcde1/what_habit_saved_you_the_most_time_at_work/",
-        redditCommentUrl:
-          "https://www.reddit.com/r/productivity/comments/1abcde1/what_habit_saved_you_the_most_time_at_work/klm1234/",
-        commentCtaLabel: "Open the top comment",
-      },
-      {
-        id: "item-2",
-        threadTitle: "How large should an emergency fund be in 2026?",
-        subredditName: "personalfinance",
-        whyItMatters:
-          "This discussion contained grounded examples from people with different income stability and family setups.",
-        summary:
-          "Commenters converged on three to six months of runway, then adjusted upward for freelancers, homeowners, and single-income households.",
-        keyTakeaways: [
-          "Stability matters more than one universal number.",
-          "Insurance and debt obligations change the target.",
-          "Keep the fund liquid and boring.",
-        ],
-        tldrPoints: [
-          "Three to six months was the common baseline.",
-          "Freelancers and single-income households aimed higher.",
-          "People warned against tying emergency cash up in volatile assets.",
-        ],
-        startSeconds: 92,
-        endSeconds: 188,
-        redditThreadUrl:
-          "https://www.reddit.com/r/personalfinance/comments/1bcdef2/how_large_should_an_emergency_fund_be_in_2026/",
-        redditCommentUrl:
-          "https://www.reddit.com/r/personalfinance/comments/1bcdef2/how_large_should_an_emergency_fund_be_in_2026/knp5678/",
-        commentCtaLabel: "See the most useful example",
-      },
-      {
-        id: "item-3",
-        threadTitle: "What early mistake cost you months in your startup?",
-        subredditName: "entrepreneur",
-        whyItMatters:
-          "It highlights repeated founder mistakes that can be converted into a startup checklist.",
-        summary:
-          "People regretted building too much before getting proof of demand. The strongest advice was to sell manually first, then automate.",
-        keyTakeaways: [
-          "Customer interviews beat assumptions.",
-          "Revenue is the clearest validation signal.",
-          "Delay complexity until it becomes necessary.",
-        ],
-        tldrPoints: [
-          "Founders regretted building too much before talking to buyers.",
-          "Manual selling surfaced demand faster than new features did.",
-          "Automation helped only after the offer was proven.",
-        ],
-        startSeconds: 188,
-        endSeconds: 300,
-        redditThreadUrl:
-          "https://www.reddit.com/r/entrepreneur/comments/1cdefg3/what_early_mistake_cost_you_months_in_your_startup/",
-        redditCommentUrl:
-          "https://www.reddit.com/r/entrepreneur/comments/1cdefg3/what_early_mistake_cost_you_months_in_your_startup/kqr9012/",
-        commentCtaLabel: "Jump to the founder reply",
+        endSeconds: TTS_PRESETS["ielts-opener"].estimatedDurationSeconds,
+        redditThreadUrl: "https://www.reddit.com/r/IELTS/",
+        redditCommentUrl: "https://www.reddit.com/r/IELTS/",
+        commentCtaLabel: "Open r/IELTS",
       },
     ],
   },

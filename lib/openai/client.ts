@@ -1,10 +1,48 @@
 import OpenAI from "openai";
 
-import { getServerEnv, resolveOpenAiScriptModel, resolveOpenAiSummaryModel } from "@/lib/config";
+import {
+  getOpenAiTtsEnv,
+  getServerEnv,
+  resolveOpenAiScriptModel,
+  resolveOpenAiSummaryModel,
+} from "@/lib/config";
 import { buildDigestScriptPrompt, buildThreadSummaryPrompt } from "@/lib/prompts/digest";
 import type { PersonaId, SummaryDepthId } from "@/lib/types";
 
 const MAX_TTS_INPUT_CHARS = 3800;
+
+type OpenAiTtsVoice =
+  | "alloy"
+  | "ash"
+  | "ballad"
+  | "coral"
+  | "echo"
+  | "fable"
+  | "nova"
+  | "onyx"
+  | "sage"
+  | "shimmer";
+
+const GPT_AUDIO_FALLBACK_MODEL = "gpt-audio-1.5";
+
+function isGptAudioModel(model: string) {
+  return model.trim().toLowerCase().startsWith("gpt-audio");
+}
+
+function isModelAccessError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const status = "status" in error ? error.status : undefined;
+  const code = "code" in error ? error.code : undefined;
+
+  return status === 403 || status === 404 || code === "model_not_found";
+}
+
+function resolveTtsVoice(voiceOverride: string | undefined, defaultVoice: string): OpenAiTtsVoice {
+  return (voiceOverride?.trim() || defaultVoice) as OpenAiTtsVoice;
+}
 
 const threadSummarySchema = {
   type: "object",
@@ -118,34 +156,79 @@ export async function generateDigestScript(input: {
   };
 }
 
+async function renderWithOpenAiSpeechTts(
+  client: OpenAI,
+  input: { model: string; voice: OpenAiTtsVoice; text: string },
+) {
+  const response = await client.audio.speech.create({
+    model: input.model,
+    voice: input.voice,
+    input: input.text,
+    response_format: "mp3",
+  });
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function renderWithGptAudioTts(
+  client: OpenAI,
+  input: { model: string; voice: OpenAiTtsVoice; text: string },
+) {
+  const response = await client.chat.completions.create({
+    model: input.model,
+    modalities: ["text", "audio"],
+    audio: { voice: input.voice, format: "mp3" },
+    messages: [
+      {
+        role: "user",
+        content: `Read the following text aloud exactly as written. Do not add commentary or change the wording.\n\n${input.text}`,
+      },
+    ],
+  });
+
+  const audioData = response.choices[0]?.message.audio?.data;
+
+  if (!audioData) {
+    throw new Error("OpenAI gpt-audio response did not include audio data.");
+  }
+
+  return Buffer.from(audioData, "base64");
+}
+
 export async function renderWithOpenAiTts(text: string, voiceOverride?: string) {
-  const { client, env } = getClient();
-  const voice = (voiceOverride?.trim() || env.OPENAI_TTS_VOICE) as
-    | "alloy"
-    | "ash"
-    | "ballad"
-    | "coral"
-    | "echo"
-    | "fable"
-    | "nova"
-    | "onyx"
-    | "sage"
-    | "shimmer";
+  const env = getOpenAiTtsEnv();
+  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  const voice = resolveTtsVoice(voiceOverride, env.OPENAI_TTS_VOICE);
+  const model = env.OPENAI_TTS_MODEL.trim();
   const chunks = splitTextForTts(text);
   const buffers: Buffer[] = [];
 
   for (const chunk of chunks) {
-    const response = await client.audio.speech.create({
-      model: env.OPENAI_TTS_MODEL,
-      voice,
-      input: chunk,
-      response_format: "mp3",
-    });
-
-    buffers.push(Buffer.from(await response.arrayBuffer()));
+    buffers.push(await renderOpenAiTtsChunk(client, { model, voice, text: chunk }));
   }
 
   return Buffer.concat(buffers);
+}
+
+async function renderOpenAiTtsChunk(
+  client: OpenAI,
+  input: { model: string; voice: OpenAiTtsVoice; text: string },
+) {
+  if (isGptAudioModel(input.model)) {
+    return renderWithGptAudioTts(client, input);
+  }
+
+  try {
+    return await renderWithOpenAiSpeechTts(client, input);
+  } catch (error) {
+    const fallbackModel = GPT_AUDIO_FALLBACK_MODEL;
+
+    if (!isModelAccessError(error) || input.model === fallbackModel) {
+      throw error;
+    }
+
+    return renderWithGptAudioTts(client, { ...input, model: fallbackModel });
+  }
 }
 
 function splitTextForTts(text: string) {
