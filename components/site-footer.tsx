@@ -1,8 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { publicEnv } from "@/lib/config";
-
 const DEVELOPER_EMAIL = "supportstratum@gmail.com";
 
 const footerColumns = [
@@ -11,7 +9,7 @@ const footerColumns = [
       { href: "/", label: "Home" },
       { href: "/settings", label: "Settings" },
       {
-        href: `${publicEnv.NEXT_PUBLIC_APP_URL}/api/podcast/feed`,
+        href: "/api/podcast/feed",
         label: "Podcast RSS",
         external: true,
       },
@@ -114,7 +112,7 @@ export function SiteFooter() {
           {footerColumns.map((column, columnIndex) => (
             <nav key={columnIndex} aria-label={`Footer section ${columnIndex + 1}`} className="flex flex-col gap-3">
               {column.links.map((link) => (
-                <FooterLink key={link.label} {...link} />
+                <FooterLink key={`${columnIndex}-${link.href}`} {...link} />
               ))}
             </nav>
           ))}
@@ -143,7 +141,10 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-10 flex flex-col gap-4 border-t border-white/[0.06] pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-display text-[11px] font-bold uppercase tracking-[0.2em] text-white/30">
+          <p
+            className="font-display text-[11px] font-bold uppercase tracking-[0.2em] text-white/30"
+            suppressHydrationWarning
+          >
             © 2025—{year} Reddit Voice Digest
           </p>
           <p className="text-[12px] text-white/30">
