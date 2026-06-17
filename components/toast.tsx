@@ -17,26 +17,32 @@ interface ToastProps {
 }
 
 export function Toast({ toast, onDismiss, durationMs = 3200 }: ToastProps) {
-  const [visible, setVisible] = useState(false);
+  if (!toast) {
+    return null;
+  }
+
+  // Remount per toast id so we can reset local state without
+  // calling setState synchronously inside an effect.
+  return <ToastView key={toast.id} toast={toast} onDismiss={onDismiss} durationMs={durationMs} />;
+}
+
+interface ToastViewProps {
+  toast: ToastMessage;
+  onDismiss: () => void;
+  durationMs: number;
+}
+
+function ToastView({ toast, onDismiss, durationMs }: ToastViewProps) {
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    if (!toast) {
-      setVisible(false);
-      return;
-    }
-
-    setVisible(true);
     const timer = window.setTimeout(() => {
       setVisible(false);
       window.setTimeout(onDismiss, 200);
     }, durationMs);
 
     return () => window.clearTimeout(timer);
-  }, [durationMs, onDismiss, toast]);
-
-  if (!toast) {
-    return null;
-  }
+  }, [durationMs, onDismiss]);
 
   const variantClass =
     toast.variant === "success"
